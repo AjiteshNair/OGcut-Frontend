@@ -1,0 +1,90 @@
+{
+  "theme": {
+    "backgroundColor": "#f3efe7",
+    "surfaceColor": "#fcfaf6",
+    "primaryTextColor": "#121212",
+    "secondaryTextColor": "#6c665e",
+    "accentColor": "#b88b58",
+    "borderColor": "#11111122",
+    "titleFontWeight": "800",
+    "subtitleFontWeight": "500",
+    "buttonFontWeight": "600"
+  },
+  "sectionsOrder": ["hero", "categories", "productGrid"],
+  "sections": {
+    "hero": {
+      "isActive": true,
+      "eyebrow": "DROP WINTER 2026",
+      "title": "OGcut",
+      "subtitle": "Quiet minimalism in motion, shaped for the city after dark.",
+      "buttonText": "EXPLORE DROPS",
+      "secondaryButtonText": "Design your own",
+      "backgroundImage": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=80",
+      "titleAlign": "left",
+      "buttonAlign": "left",
+      "titleFontWeight": "800",
+      "subtitleFontWeight": "500",
+      "buttonFontWeight": "600"
+    },
+    "categories": {
+      "isActive": true,
+      "title": "SHOP BY CATEGORY",
+      "items": ["T-Shirts", "Hoodies", "Outerwear", "Accessories"]
+    },
+    "productGrid": {
+      "isActive": true,
+      "title": "NEW ARRIVALS",
+      "emptyState": "No products match this filter."
+    }
+  },
+  "products": [
+    {
+      "id": 1,
+      "name": "Oversized Signature Tee",
+      "price": 120,
+      "category": "T-Shirts",
+      "image": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Soft structure / sculpted drape"
+    },
+    {
+      "id": 2,
+      "name": "Monarch Hoodie",
+      "price": 220,
+      "category": "Hoodies",
+      "image": "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Heavyweight cotton / elevated volume"
+    },
+    {
+      "id": 3,
+      "name": "Contour Jacket",
+      "price": 310,
+      "category": "Outerwear",
+      "image": "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Minimal shell / clean geometry"
+    },
+    {
+      "id": 4,
+      "name": "Chrome Cap",
+      "price": 90,
+      "category": "Accessories",
+      "image": "https://images.unsplash.com/photo-1521369909024-2d4437f4c0f2?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Precision finish / brushed texture"
+    },
+    {
+      "id": 5,
+      "name": "Block Tee",
+      "price": 110,
+      "category": "T-Shirts",
+      "image": "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Architectural cut / premium cotton"
+    },
+    {
+      "id": 6,
+      "name": "Shadow Pullover",
+      "price": 260,
+      "category": "Hoodies",
+      "image": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80",
+      "tagline": "Sculpted line / effortless drape"
+    }
+  ]
+}
