@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef} from 'react';
 
 type DesignType = 'graphic_only' | 'human_mockup' | 'hybrid';
 type TargetZone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
@@ -18,6 +18,7 @@ type Product = {
   target_zone?: TargetZone;
   category?: string;
   tagline?: string;
+  description?: string;
 };
 
 type CartItem = Product & {
@@ -254,7 +255,6 @@ function ProductGridSection({
           </div>
         ) : (
           visibleProducts.map((product) => {
-            // Determine image preview URL based on design type distinction
             const displayImage = product.mockup_url || product.graphic_url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
             const is3DDesign = product.design_type === 'graphic_only';
 
@@ -263,18 +263,18 @@ function ProductGridSection({
                 key={product.id}
                 className="group relative overflow-hidden rounded-[1.25rem] border border-black/10 bg-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.08)]"
               >
-                {/* Visual Distinction Tag */}
                 <div className="absolute left-3 top-3 z-10 rounded-full border border-black/10 bg-white/90 px-3 py-1 text-[0.6rem] font-bold uppercase tracking-[0.2em] backdrop-blur">
-                  {is3DDesign ? '3D Customizable' : 'Model Shot'}
+                  {is3DDesign ? '3D Graphic' : 'Model Shot'}
                 </div>
 
-                <div className="overflow-hidden bg-slate-100">
+                <Link href={`/product/${product.slug || product.id}`} className="block overflow-hidden bg-slate-100">
                   <img
                     src={displayImage}
                     alt={product.name}
                     className={`h-72 w-full transition duration-500 group-hover:scale-[1.03] ${is3DDesign ? 'object-contain p-6' : 'object-cover'}`}
                   />
-                </div>
+                </Link>
+                
                 <div className="space-y-3 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -293,24 +293,14 @@ function ProductGridSection({
                     {product.tagline || 'Heavyweight cotton / custom fit'}
                   </p>
                   <div className="flex gap-2 pt-2">
-                    {is3DDesign ? (
-                      <Link
-                        href={`/customize?graphic=${encodeURIComponent(product.graphic_url || '')}&zone=${product.target_zone || 'front'}`}
-                        className="flex-1 rounded-full text-center px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-white transition duration-300 hover:opacity-90"
-                        style={{ backgroundColor: theme.accentColor }}
-                      >
-                        Customize in 3D
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => addToCart(product)}
-                        className="flex-1 rounded-full px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-white transition duration-300 hover:opacity-90"
-                        style={{ backgroundColor: theme.accentColor }}
-                      >
-                        Add To Cart
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => addToCart(product)}
+                      className="flex-1 rounded-full px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-white transition duration-300 hover:opacity-90"
+                      style={{ backgroundColor: theme.accentColor }}
+                    >
+                      Add To Cart
+                    </button>
                     <button
                       type="button"
                       onClick={() => quickView(product)}
@@ -336,6 +326,96 @@ function ProductGridSection({
   );
 }
 
+function QuickViewModal({
+  product,
+  onClose,
+  onAddToCart,
+  theme,
+}: {
+  product: Product | null;
+  onClose: () => void;
+  onAddToCart: (product: Product) => void;
+  theme: Theme;
+}) {
+  if (!product) return null;
+
+  const images = [product.mockup_url, product.graphic_url].filter(Boolean) as string[];
+  const fallbackImage = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
+  const displayImages = images.length > 0 ? images : [fallbackImage];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm transition-opacity">
+      <div
+        className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-black/10 p-6 shadow-2xl md:p-8"
+        style={{ backgroundColor: theme.surfaceColor }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 text-xs font-bold uppercase transition hover:bg-black/5"
+        >
+          ×
+        </button>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="flex flex-col gap-3">
+            <div className="overflow-hidden rounded-[1rem] bg-slate-100 border border-black/10">
+              <img
+                src={displayImages[0]}
+                alt={product.name}
+                className="h-64 w-full object-cover md:h-80"
+              />
+            </div>
+            {displayImages.length > 1 && (
+              <div className="grid grid-cols-2 gap-2">
+                {displayImages.map((img, idx) => (
+                  <img
+                    key={idx}
+                    src={img}
+                    alt={`${product.name} - view ${idx + 1}`}
+                    className="h-20 w-full rounded-[0.5rem] border border-black/10 object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <p className="text-[0.65rem] uppercase tracking-[0.4em]" style={{ color: theme.secondaryTextColor }}>
+                {product.category || 'T-Shirts'}
+              </p>
+              <h3 className="text-2xl font-bold uppercase tracking-[0.15em]" style={{ color: theme.primaryTextColor }}>
+                {product.name}
+              </h3>
+              <p className="text-lg font-semibold" style={{ color: theme.accentColor }}>
+                ${product.base_price}
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: theme.secondaryTextColor }}>
+                {product.description || product.tagline || 'Heavyweight premium cotton blend with modern drop shoulders.'}
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  onAddToCart(product);
+                  onClose();
+                }}
+                className="w-full rounded-full py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition duration-300 hover:opacity-90"
+                style={{ backgroundColor: theme.accentColor }}
+              >
+                Add To Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CartSidebar({
   isOpen,
   isMinimized,
@@ -353,11 +433,11 @@ function CartSidebar({
   subtotal: number;
   removeFromCart: (productId: string) => void;
 }) {
-  if (!isOpen) return null;
-
   return (
     <aside
-      className={`fixed right-0 top-0 z-40 flex h-full flex-col border-l border-black/10 bg-[#f8f2e8] shadow-[0_20px_80px_rgba(0,0,0,0.15)] transition-all duration-300 ${isMinimized ? 'w-16' : 'w-[92vw] max-w-sm'}`}
+      className={`fixed right-0 top-0 z-40 flex h-full flex-col border-l border-black/10 bg-[#f8f2e8] shadow-[0_20px_80px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      } ${isMinimized ? 'w-16' : 'w-[92vw] max-w-sm'}`}
     >
       <div className="flex items-center justify-between border-b border-black/10 px-3 py-3">
         {!isMinimized ? (
@@ -437,12 +517,10 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastAdded, setLastAdded] = useState<string | null>(null);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isCartMinimized, setIsCartMinimized] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   const categoryOptions = useMemo(() => ['All', ...categoriesSection.items] as CategoryFilter[], []);
 
-  // FETCH PRODUCTS FROM NEON BACKEND API
   useEffect(() => {
     async function fetchProducts() {
       try {
@@ -488,6 +566,10 @@ export default function Home() {
   const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
   const subtotal = useMemo(() => cartItems.reduce((sum, item) => sum + item.base_price * item.quantity, 0), [cartItems]);
 
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartMinimized, setIsCartMinimized] = useState(false);
+  const cartTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const addToCart = (product: Product) => {
     setCartItems((current) => {
       const existing = current.find((item) => item.id === product.id);
@@ -499,16 +581,22 @@ export default function Home() {
     setLastAdded(product.name);
     setIsCartOpen(true);
     setIsCartMinimized(false);
+
+    // Clear any active timer so rapidly adding items keeps it open
+    if (cartTimerRef.current) clearTimeout(cartTimerRef.current);
+
+    // Slide back out after 3 seconds
+    cartTimerRef.current = setTimeout(() => {
+      setIsCartOpen(false);
+    }, 3000);
   };
 
   const removeFromCart = (productId: string) => {
     setCartItems((current) => current.filter((item) => item.id !== productId));
   };
 
-  const quickView = (product: Product) => {
-    if (typeof window !== 'undefined') {
-      window.open(`/product/${product.id}`, '_blank', 'noopener,noreferrer');
-    }
+  const handleQuickView = (product: Product) => {
+    setQuickViewProduct(product);
   };
 
   return (
@@ -540,7 +628,7 @@ export default function Home() {
                   cartCount={cartCount}
                   lastAdded={lastAdded}
                   addToCart={addToCart}
-                  quickView={quickView}
+                  quickView={handleQuickView}
                   loading={loading}
                   categoryOptions={categoryOptions}
                 />
@@ -561,6 +649,13 @@ export default function Home() {
         cartItems={cartItems}
         subtotal={subtotal}
         removeFromCart={removeFromCart}
+      />
+
+      <QuickViewModal
+        product={quickViewProduct}
+        onClose={() => setQuickViewProduct(null)}
+        onAddToCart={addToCart}
+        theme={theme}
       />
     </main>
   );
