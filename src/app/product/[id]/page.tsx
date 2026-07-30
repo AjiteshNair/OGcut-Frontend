@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import AddToCartButton from '@/context/AddToCartButton';
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -116,10 +117,10 @@ export default async function ProductDetailPage({ params }: Props) {
               )}
             </div>
 
-            {/* Action Button */}
-            <button className="w-full rounded-xl bg-black py-4 text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-neutral-800 transition-colors">
-              Add to Cart
-            </button>
+            {/* Context Add to Cart Button */}
+            <div className="pt-4">
+              <AddToCartButton product={product} />
+            </div>
           </div>
 
         </div>

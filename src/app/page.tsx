@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, useRef} from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCart } from '../context/CartContext';
+import AddToCartButton from '@/context/AddToCartButton';
 
 type DesignType = 'graphic_only' | 'human_mockup' | 'hybrid';
 type TargetZone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
@@ -21,10 +23,6 @@ type Product = {
   description?: string;
 };
 
-type CartItem = Product & {
-  quantity: number;
-};
-
 type CategoryFilter = 'All' | string;
 
 type Theme = {
@@ -38,8 +36,6 @@ type Theme = {
   subtitleFontWeight: string;
   buttonFontWeight: string;
 };
-
-const CART_STORAGE_KEY = 'OGcut-cart';
 
 const theme: Theme = {
   backgroundColor: '#f3efe7',
@@ -79,7 +75,8 @@ const heroSection: HeroSectionConfig = {
   subtitle: 'Quiet minimalism in motion, shaped for the city after dark.',
   buttonText: 'EXPLORE DROPS',
   secondaryButtonText: 'Design your own',
-  backgroundImage: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=80',
+  backgroundImage:
+    'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=80',
   titleAlign: 'left',
   buttonAlign: 'left',
   titleFontWeight: '800',
@@ -106,21 +103,38 @@ function HeroSection({
   theme: Theme;
   section: typeof heroSection;
 }) {
-  const alignItems = section.titleAlign === 'center' ? 'items-center' : 'items-start';
+  const alignItems =
+    section.titleAlign === 'center' ? 'items-center' : 'items-start';
   const textAlign = section.titleAlign === 'center' ? 'center' : 'left';
 
   return (
     <section
       id="hero"
       className="overflow-hidden rounded-[2rem] border border-black/10 shadow-[0_20px_80px_rgba(0,0,0,0.08)]"
-      style={{ backgroundColor: theme.surfaceColor, color: theme.primaryTextColor }}
+      style={{
+        backgroundColor: theme.surfaceColor,
+        color: theme.primaryTextColor,
+      }}
     >
       <div className="relative min-h-[560px] overflow-hidden">
-        <img src={section.backgroundImage} alt={section.title} className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={section.backgroundImage}
+          alt={section.title}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/35 to-black/10" />
-        <div className={`relative flex h-full min-h-[560px] flex-col justify-between p-8 text-left md:p-12 lg:p-16 ${alignItems}`} style={{ textAlign }}>
+        <div
+          className={`relative flex h-full min-h-[560px] flex-col justify-between p-8 text-left md:p-12 lg:p-16 ${alignItems}`}
+          style={{ textAlign }}
+        >
           <div className="max-w-2xl space-y-5">
-            <p className="text-[0.7rem] uppercase tracking-[0.6em]" style={{ color: theme.accentColor, fontWeight: section.subtitleFontWeight }}>
+            <p
+              className="text-[0.7rem] uppercase tracking-[0.6em]"
+              style={{
+                color: theme.accentColor,
+                fontWeight: section.subtitleFontWeight,
+              }}
+            >
               {section.eyebrow}
             </p>
             <h1
@@ -129,15 +143,27 @@ function HeroSection({
             >
               {section.title}
             </h1>
-            <p className="max-w-xl text-base leading-8 text-white/85 sm:text-lg" style={{ fontWeight: section.subtitleFontWeight }}>
+            <p
+              className="max-w-xl text-base leading-8 text-white/85 sm:text-lg"
+              style={{ fontWeight: section.subtitleFontWeight }}
+            >
               {section.subtitle}
             </p>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3" style={{ justifyContent: section.buttonAlign === 'center' ? 'center' : 'flex-start' }}>
+          <div
+            className="mt-8 flex flex-wrap gap-3"
+            style={{
+              justifyContent:
+                section.buttonAlign === 'center' ? 'center' : 'flex-start',
+            }}
+          >
             <Link
               href="/customize"
               className="rounded-full border border-white/20 px-6 py-3 text-sm uppercase tracking-[0.35em] text-white transition duration-300 hover:opacity-90"
-              style={{ backgroundColor: theme.accentColor, fontWeight: section.buttonFontWeight }}
+              style={{
+                backgroundColor: theme.accentColor,
+                fontWeight: section.buttonFontWeight,
+              }}
             >
               {section.buttonText}
             </Link>
@@ -163,9 +189,16 @@ function CategoriesSection({
   section: typeof categoriesSection;
 }) {
   return (
-    <section id="categories" className="rounded-[1.5rem] border border-black/10 p-6" style={{ backgroundColor: theme.surfaceColor }}>
+    <section
+      id="categories"
+      className="rounded-[1.5rem] border border-black/10 p-6"
+      style={{ backgroundColor: theme.surfaceColor }}
+    >
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.45em]" style={{ color: theme.primaryTextColor }}>
+        <h2
+          className="text-sm font-semibold uppercase tracking-[0.45em]"
+          style={{ color: theme.primaryTextColor }}
+        >
           {section.title}
         </h2>
         <div className="flex flex-wrap gap-3">
@@ -173,7 +206,10 @@ function CategoriesSection({
             <span
               key={item}
               className="rounded-full border border-black/10 px-4 py-2 text-[0.7rem] uppercase tracking-[0.3em] transition duration-300 hover:translate-y-[-1px]"
-              style={{ color: theme.primaryTextColor, borderColor: theme.borderColor }}
+              style={{
+                color: theme.primaryTextColor,
+                borderColor: theme.borderColor,
+              }}
             >
               {item}
             </span>
@@ -212,13 +248,23 @@ function ProductGridSection({
   const activeLabel = activeCategory === 'All' ? 'All' : activeCategory;
 
   return (
-    <section id="productGrid" className="space-y-5 rounded-[1.5rem] border border-black/10 p-6" style={{ backgroundColor: theme.surfaceColor }}>
+    <section
+      id="productGrid"
+      className="space-y-5 rounded-[1.5rem] border border-black/10 p-6"
+      style={{ backgroundColor: theme.surfaceColor }}
+    >
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.45em]" style={{ color: theme.primaryTextColor }}>
+          <h2
+            className="text-sm font-semibold uppercase tracking-[0.45em]"
+            style={{ color: theme.primaryTextColor }}
+          >
             {section.title}
           </h2>
-          <p className="text-xs uppercase tracking-[0.3em]" style={{ color: theme.secondaryTextColor }}>
+          <p
+            className="text-xs uppercase tracking-[0.3em]"
+            style={{ color: theme.secondaryTextColor }}
+          >
             Viewing: {activeLabel}
           </p>
         </div>
@@ -246,16 +292,25 @@ function ProductGridSection({
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {loading ? (
-          <div className="col-span-full rounded-[1.25rem] border border-dashed border-black/10 p-8 text-center text-sm uppercase tracking-[0.3em]" style={{ color: theme.secondaryTextColor }}>
+          <div
+            className="col-span-full rounded-[1.25rem] border border-dashed border-black/10 p-8 text-center text-sm uppercase tracking-[0.3em]"
+            style={{ color: theme.secondaryTextColor }}
+          >
             Loading products from server...
           </div>
         ) : visibleProducts.length === 0 ? (
-          <div className="col-span-full rounded-[1.25rem] border border-dashed border-black/10 p-8 text-center text-sm uppercase tracking-[0.3em]" style={{ color: theme.secondaryTextColor }}>
+          <div
+            className="col-span-full rounded-[1.25rem] border border-dashed border-black/10 p-8 text-center text-sm uppercase tracking-[0.3em]"
+            style={{ color: theme.secondaryTextColor }}
+          >
             {section.emptyState}
           </div>
         ) : (
           visibleProducts.map((product) => {
-            const displayImage = product.mockup_url || product.graphic_url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
+            const displayImage =
+              product.mockup_url ||
+              product.graphic_url ||
+              'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
             const is3DDesign = product.design_type === 'graphic_only';
 
             return (
@@ -267,40 +322,52 @@ function ProductGridSection({
                   {is3DDesign ? '3D Graphic' : 'Model Shot'}
                 </div>
 
-                <Link href={`/product/${product.slug || product.id}`} className="block overflow-hidden bg-slate-100">
+                <Link
+                  href={`/product/${product.slug || product.id}`}
+                  className="block overflow-hidden bg-slate-100"
+                >
                   <img
                     src={displayImage}
                     alt={product.name}
-                    className={`h-72 w-full transition duration-500 group-hover:scale-[1.03] ${is3DDesign ? 'object-contain p-6' : 'object-cover'}`}
+                    className={`h-72 w-full transition duration-500 group-hover:scale-[1.03] ${
+                      is3DDesign ? 'object-contain p-6' : 'object-cover'
+                    }`}
                   />
                 </Link>
-                
+
                 <div className="space-y-3 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[0.65rem] uppercase tracking-[0.4em]" style={{ color: theme.secondaryTextColor }}>
+                      <p
+                        className="text-[0.65rem] uppercase tracking-[0.4em]"
+                        style={{ color: theme.secondaryTextColor }}
+                      >
                         {product.category || 'T-Shirts'}
                       </p>
-                      <h3 className="mt-2 text-base font-semibold uppercase tracking-[0.2em]" style={{ color: theme.primaryTextColor }}>
+                      <h3
+                        className="mt-2 text-base font-semibold uppercase tracking-[0.2em]"
+                        style={{ color: theme.primaryTextColor }}
+                      >
                         {product.name}
                       </h3>
                     </div>
-                    <span className="text-sm font-semibold" style={{ color: theme.accentColor }}>
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: theme.accentColor }}
+                    >
                       ${product.base_price}
                     </span>
                   </div>
-                  <p className="text-sm leading-6" style={{ color: theme.secondaryTextColor }}>
+                  <p
+                    className="text-sm leading-6"
+                    style={{ color: theme.secondaryTextColor }}
+                  >
                     {product.tagline || 'Heavyweight cotton / custom fit'}
                   </p>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => addToCart(product)}
-                      className="flex-1 rounded-full px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-white transition duration-300 hover:opacity-90"
-                      style={{ backgroundColor: theme.accentColor }}
-                    >
-                      Add To Cart
-                    </button>
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="flex-1">
+                      <AddToCartButton product={product} />
+                    </div>
                     <button
                       type="button"
                       onClick={() => quickView(product)}
@@ -317,10 +384,15 @@ function ProductGridSection({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-black/10 pt-3 text-sm uppercase tracking-[0.2em] md:flex-row md:items-center md:justify-between" style={{ color: theme.primaryTextColor }}>
+      <div
+        className="flex flex-col gap-2 border-t border-black/10 pt-3 text-sm uppercase tracking-[0.2em] md:flex-row md:items-center md:justify-between"
+        style={{ color: theme.primaryTextColor }}
+      >
         <span>Cart items: {cartCount}</span>
         <span>Showing {visibleProducts.length} products</span>
-        {lastAdded ? <span style={{ color: theme.accentColor }}>Last Added: {lastAdded}</span> : null}
+        {lastAdded ? (
+          <span style={{ color: theme.accentColor }}>Last Added: {lastAdded}</span>
+        ) : null}
       </div>
     </section>
   );
@@ -339,8 +411,11 @@ function QuickViewModal({
 }) {
   if (!product) return null;
 
-  const images = [product.mockup_url, product.graphic_url].filter(Boolean) as string[];
-  const fallbackImage = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
+  const images = [product.mockup_url, product.graphic_url].filter(
+    Boolean
+  ) as string[];
+  const fallbackImage =
+    'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80';
   const displayImages = images.length > 0 ? images : [fallbackImage];
 
   return (
@@ -352,6 +427,7 @@ function QuickViewModal({
         <button
           type="button"
           onClick={onClose}
+          aria-label="Close modal"
           className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 text-xs font-bold uppercase transition hover:bg-black/5"
         >
           ×
@@ -359,7 +435,7 @@ function QuickViewModal({
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="flex flex-col gap-3">
-            <div className="overflow-hidden rounded-[1rem] bg-slate-100 border border-black/10">
+            <div className="overflow-hidden rounded-[1rem] border border-black/10 bg-slate-100">
               <img
                 src={displayImages[0]}
                 alt={product.name}
@@ -382,17 +458,31 @@ function QuickViewModal({
 
           <div className="flex flex-col justify-between space-y-4">
             <div className="space-y-2">
-              <p className="text-[0.65rem] uppercase tracking-[0.4em]" style={{ color: theme.secondaryTextColor }}>
+              <p
+                className="text-[0.65rem] uppercase tracking-[0.4em]"
+                style={{ color: theme.secondaryTextColor }}
+              >
                 {product.category || 'T-Shirts'}
               </p>
-              <h3 className="text-2xl font-bold uppercase tracking-[0.15em]" style={{ color: theme.primaryTextColor }}>
+              <h3
+                className="text-2xl font-bold uppercase tracking-[0.15em]"
+                style={{ color: theme.primaryTextColor }}
+              >
                 {product.name}
               </h3>
-              <p className="text-lg font-semibold" style={{ color: theme.accentColor }}>
+              <p
+                className="text-lg font-semibold"
+                style={{ color: theme.accentColor }}
+              >
                 ${product.base_price}
               </p>
-              <p className="text-xs leading-relaxed" style={{ color: theme.secondaryTextColor }}>
-                {product.description || product.tagline || 'Heavyweight premium cotton blend with modern drop shoulders.'}
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: theme.secondaryTextColor }}
+              >
+                {product.description ||
+                  product.tagline ||
+                  'Heavyweight premium cotton blend with modern drop shoulders.'}
               </p>
             </div>
 
@@ -429,7 +519,7 @@ function CartSidebar({
   isMinimized: boolean;
   onToggleMinimize: () => void;
   onClose: () => void;
-  cartItems: CartItem[];
+  cartItems: any[];
   subtotal: number;
   removeFromCart: (productId: string) => void;
 }) {
@@ -442,14 +532,19 @@ function CartSidebar({
       <div className="flex items-center justify-between border-b border-black/10 px-3 py-3">
         {!isMinimized ? (
           <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.35em] text-black/55">Your bag</p>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em]">Cart</p>
+            <p className="text-[0.65rem] uppercase tracking-[0.35em] text-black/55">
+              Your bag
+            </p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em]">
+              Cart
+            </p>
           </div>
         ) : null}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onToggleMinimize}
+            aria-label={isMinimized ? 'Expand Cart' : 'Minimize Cart'}
             className="rounded-full border border-black/10 px-2 py-1 text-[0.7rem] uppercase tracking-[0.25em]"
           >
             {isMinimized ? '▸' : '◂'}
@@ -457,6 +552,7 @@ function CartSidebar({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close Cart"
             className="rounded-full border border-black/10 px-2 py-1 text-[0.7rem] uppercase tracking-[0.25em]"
           >
             ×
@@ -467,20 +563,33 @@ function CartSidebar({
       {!isMinimized ? (
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="mb-4 flex items-center justify-between border-b border-black/10 pb-3">
-            <p className="text-[0.7rem] uppercase tracking-[0.3em] text-black/60">Subtotal</p>
-            <p className="text-lg font-semibold uppercase tracking-[0.2em]">${subtotal.toFixed(0)}</p>
+            <p className="text-[0.7rem] uppercase tracking-[0.3em] text-black/60">
+              Subtotal
+            </p>
+            <p className="text-lg font-semibold uppercase tracking-[0.2em]">
+              ${subtotal.toFixed(0)}
+            </p>
           </div>
 
           {cartItems.length === 0 ? (
-            <p className="text-sm uppercase tracking-[0.25em] text-black/60">No items in your bag yet.</p>
+            <p className="text-sm uppercase tracking-[0.25em] text-black/60">
+              No items in your bag yet.
+            </p>
           ) : (
             <ul className="space-y-2">
               {cartItems.map((item) => (
-                <li key={item.id} className="rounded-[1rem] border border-black/10 bg-white/70 p-3">
+                <li
+                  key={item.id}
+                  className="rounded-[1rem] border border-black/10 bg-white/70 p-3"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[0.7rem] uppercase tracking-[0.25em] text-black/70">{item.name}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/50">Qty {item.quantity}</p>
+                      <p className="text-[0.7rem] uppercase tracking-[0.25em] text-black/70">
+                        {item.name}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/50">
+                        Qty {item.quantity}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -513,13 +622,18 @@ function CartSidebar({
 
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('All');
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastAdded, setLastAdded] = useState<string | null>(null);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
-  const categoryOptions = useMemo(() => ['All', ...categoriesSection.items] as CategoryFilter[], []);
+  // Consume cart state and methods directly from the CartContext
+  const { cartItems, addToCart: addToCartContext, removeFromCart, cartCount, subtotal } = useCart();
+
+  const categoryOptions = useMemo(
+    () => ['All', ...categoriesSection.items] as CategoryFilter[],
+    []
+  );
 
   useEffect(() => {
     async function fetchProducts() {
@@ -540,59 +654,32 @@ export default function Home() {
     fetchProducts();
   }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
-    if (savedCart) {
-      try {
-        setCartItems(JSON.parse(savedCart) as CartItem[]);
-      } catch {
-        console.warn('Unable to parse saved cart');
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-  }, [cartItems]);
-
   const visibleProducts = useMemo(() => {
     if (activeCategory === 'All') return products;
     return products.filter((p) => p.category === activeCategory);
   }, [activeCategory, products]);
 
-  const cartCount = useMemo(() => cartItems.reduce((sum, item) => sum + item.quantity, 0), [cartItems]);
-  const subtotal = useMemo(() => cartItems.reduce((sum, item) => sum + item.base_price * item.quantity, 0), [cartItems]);
-
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCartMinimized, setIsCartMinimized] = useState(false);
   const cartTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const addToCart = (product: Product) => {
-    setCartItems((current) => {
-      const existing = current.find((item) => item.id === product.id);
-      if (existing) {
-        return current.map((item) => (item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
-      }
-      return [...current, { ...product, quantity: 1 }];
-    });
+  useEffect(() => {
+    return () => {
+      if (cartTimerRef.current) clearTimeout(cartTimerRef.current);
+    };
+  }, []);
+
+  const handleAddToCart = (product: Product) => {
+    addToCartContext(product);
     setLastAdded(product.name);
     setIsCartOpen(true);
     setIsCartMinimized(false);
 
-    // Clear any active timer so rapidly adding items keeps it open
     if (cartTimerRef.current) clearTimeout(cartTimerRef.current);
 
-    // Slide back out after 3 seconds
     cartTimerRef.current = setTimeout(() => {
       setIsCartOpen(false);
     }, 3000);
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCartItems((current) => current.filter((item) => item.id !== productId));
   };
 
   const handleQuickView = (product: Product) => {
@@ -600,7 +687,10 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-8" style={{ backgroundColor: theme.backgroundColor }}>
+    <main
+      className="min-h-screen px-4 py-6 sm:px-6 lg:px-8"
+      style={{ backgroundColor: theme.backgroundColor }}
+    >
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         {sectionOrder
           .filter((key) => {
@@ -611,10 +701,18 @@ export default function Home() {
           })
           .map((sectionKey) => {
             if (sectionKey === 'hero') {
-              return <HeroSection key={sectionKey} theme={theme} section={heroSection} />;
+              return (
+                <HeroSection key={sectionKey} theme={theme} section={heroSection} />
+              );
             }
             if (sectionKey === 'categories') {
-              return <CategoriesSection key={sectionKey} theme={theme} section={categoriesSection} />;
+              return (
+                <CategoriesSection
+                  key={sectionKey}
+                  theme={theme}
+                  section={categoriesSection}
+                />
+              );
             }
             if (sectionKey === 'productGrid') {
               return (
@@ -627,7 +725,7 @@ export default function Home() {
                   visibleProducts={visibleProducts}
                   cartCount={cartCount}
                   lastAdded={lastAdded}
-                  addToCart={addToCart}
+                  addToCart={handleAddToCart}
                   quickView={handleQuickView}
                   loading={loading}
                   categoryOptions={categoryOptions}
@@ -654,7 +752,7 @@ export default function Home() {
       <QuickViewModal
         product={quickViewProduct}
         onClose={() => setQuickViewProduct(null)}
-        onAddToCart={addToCart}
+        onAddToCart={handleAddToCart}
         theme={theme}
       />
     </main>
