@@ -31,7 +31,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-[#f5f0e8] text-black">
         <CartProvider>
-          <Navbar />
+          <Navbar  />
           {children}
         </CartProvider>
       </body>
