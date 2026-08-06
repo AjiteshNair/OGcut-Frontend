@@ -11,34 +11,39 @@ interface User {
   last_name: string;
 }
 
-interface NavbarProps {
-  user?: User | null;
-  cartCount?: number;
-}
+export default function Navbar() {
+  const [user, setUser] = useState<User | null>(null);
 
-export default function Navbar({ user: propUser = null, cartCount = 0 }: NavbarProps) {
-  const [currentUser, setCurrentUser] = useState<User | null>(propUser);
-
-  // Sync prop changes or read from localStorage on mount
-  useEffect(() => {
-    if (propUser) {
-      setCurrentUser(propUser);
-    } else {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        try {
-          setCurrentUser(JSON.parse(storedUser));
-        } catch (e) {
-          console.error('Failed to parse user from localStorage', e);
-        }
+  const checkUser = () => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        setUser(null);
       }
+    } else {
+      setUser(null);
     }
-  }, [propUser]);
+  };
+
+  useEffect(() => {
+    checkUser();
+    
+    // Update navbar on custom login events or storage changes across tabs
+    window.addEventListener('storage', checkUser);
+    window.addEventListener('user-logged-in', checkUser);
+
+    return () => {
+      window.removeEventListener('storage', checkUser);
+      window.removeEventListener('user-logged-in', checkUser);
+    };
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    setCurrentUser(null);
+    setUser(null);
     window.location.href = '/auth';
   };
 
@@ -51,24 +56,19 @@ export default function Navbar({ user: propUser = null, cartCount = 0 }: NavbarP
       <div className="flex items-center gap-6">
         <button className="relative p-2 text-gray-700 hover:text-black">
           <ShoppingBag className="w-6 h-6" />
-          {cartCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-black text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-              {cartCount}
-            </span>
-          )}
         </button>
 
-        {currentUser ? (
+        {user ? (
           <div className="flex items-center gap-3">
             <Link
               href="/account"
               className="flex items-center gap-2 border border-gray-200 rounded-full py-1.5 px-3 bg-gray-50 hover:bg-gray-100 transition-colors"
             >
               <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold uppercase">
-                {currentUser.first_name?.[0] || 'U'}{currentUser.last_name?.[0] || ''}
+                {user.first_name?.[0] || 'U'}{user.last_name?.[0] || ''}
               </div>
               <span className="text-sm font-semibold text-gray-900 pr-1">
-                {currentUser.first_name}
+                {user.first_name}
               </span>
             </Link>
 

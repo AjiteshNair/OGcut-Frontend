@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function AuthPage() {
   const router = useRouter();
-  const [isLogin, setIsLogin] = useState(false); // Default to Register for easy testing
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect');
+
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,9 +28,10 @@ export default function AuthPage() {
     setLoading(true);
     setError('');
 
+    const BACKEND_URL = 'http://localhost:3001';
     const endpoint = isLogin
-      ? 'http://localhost:3001/auth/login'
-      : 'http://localhost:3001/auth/register';
+      ? `${BACKEND_URL}/auth/login`
+      : `${BACKEND_URL}/auth/register`;
 
     try {
       const res = await fetch(endpoint, {
@@ -46,14 +50,28 @@ export default function AuthPage() {
         throw new Error(data.message || 'Authentication failed');
       }
 
-      // Save token and user payload locally
       if (data.access_token) {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Notify global Navbar component to re-read localStorage
+        window.dispatchEvent(new Event('user-logged-in'));
       }
 
-      // Go directly to account dashboard upon success
-      router.push('/account');
+      // Determine return route
+      let targetPath = '/';
+      
+      if (redirectUrl) {
+        targetPath = redirectUrl;
+      } else if (typeof document !== 'undefined' && document.referrer) {
+        const referrerUrl = new URL(document.referrer);
+        // Ensure referrer belongs to same domain and is not the auth page itself
+        if (referrerUrl.origin === window.location.origin && !referrerUrl.pathname.startsWith('/auth')) {
+          targetPath = referrerUrl.pathname + referrerUrl.search;
+        }
+      }
+
+      window.location.href = targetPath;
     } catch (err: any) {
       setError(err.message);
     } finally {

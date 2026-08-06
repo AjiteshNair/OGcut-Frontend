@@ -1,128 +1,178 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import AddToCartButton from '@/context/AddToCartButton';
+import { ArrowLeft, ShoppingBag, Plus, Minus, Loader2 } from 'lucide-react';
 
-type Props = {
-  params: Promise<{ id: string }>;
-};
-
-// Interface matching your NestJS JSON response exactly
 interface Product {
   id: string;
   name: string;
   base_price: number;
-  category: string;
+  category?: string;
   tagline?: string;
-  description?: string;
   design_type?: string;
   graphic_url?: string;
   mockup_url?: string;
   target_zone?: string;
 }
 
-async function getProduct(id: string): Promise<Product | null> {
-  try {
-    // Falls back to port 3001 if env variable is not set
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-    
-    const res = await fetch(`${baseUrl}/products/${id}`, {
-      cache: 'no-store', // Ensures fresh DB data
-    });
+export default function ProductDetailPage() {
+  const routeParams = useParams();
+  const productId = routeParams?.id as string;
 
-    if (!res.ok) {
-      console.error(`[NestJS Fetch Error] Status: ${res.status}`);
-      return null;
-    }
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedSize, setSelectedSize] = useState('M');
 
-    return await res.json();
-  } catch (error) {
-    console.error('[NestJS Fetch Error] Could not connect:', error);
-    return null;
+  useEffect(() => {
+    if (!productId) return;
+
+    const fetchProduct = async () => {
+      try {
+        const response = await fetch(`http://localhost:3001/products/${productId}`);
+        if (!response.ok) {
+          throw new Error('Product not found');
+        }
+        const data = await response.json();
+        setProduct(data);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load product');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [productId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-black" />
+      </div>
+    );
   }
-}
 
-export default async function ProductDetailPage({ params }: Props) {
-  const { id } = await params;
-  const product = await getProduct(id);
-
-  if (!product) {
-    notFound();
-  }
-
-  // Fallback chain for image display
-  const displayImage = product.mockup_url || product.graphic_url;
-
-  return (
-    <main className="min-h-screen bg-[#f3efe7] px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl">
+  if (error || !product) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Product Not Found</h2>
+        <p className="text-gray-500 text-sm mb-6">{error || "The requested item couldn't be located."}</p>
         <Link
           href="/"
-          className="mb-8 inline-block text-xs font-semibold uppercase tracking-[0.3em] text-neutral-600 hover:text-black transition-colors"
+          className="bg-black text-white text-xs font-bold px-6 py-3 rounded-xl flex items-center gap-2 hover:bg-gray-800 transition-all"
         >
-          ← Back to Shop
+          <ArrowLeft className="w-4 h-4" /> Back to Catalog
+        </Link>
+      </div>
+    );
+  }
+
+  const imageUrl = product.mockup_url || product.graphic_url || 'https://via.placeholder.com/600';
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-12 px-4 md:px-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Back Link */}
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black mb-8 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Catalog
         </Link>
 
-        <div className="grid gap-8 rounded-[2rem] border border-black/10 bg-[#fcfaf6] p-6 shadow-xl md:grid-cols-2 md:p-10">
-          
-          {/* Product Image Section */}
-          <div className="overflow-hidden rounded-[1.5rem] bg-slate-100 border border-black/10 flex items-center justify-center min-h-[350px]">
-            {displayImage ? (
-              <img
-                src={displayImage}
-                alt={product.name}
-                className="h-full w-full object-cover rounded-[1.5rem]"
-              />
-            ) : (
-              <div className="text-neutral-400 text-sm">No Image Available</div>
+        {/* Product Container */}
+        <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 shadow-sm">
+          {/* Product Image */}
+          <div className="relative bg-gray-100 rounded-2xl overflow-hidden h-96 md:h-[450px]">
+            <img
+              src={imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://placehold.co/600x600/png?text=Image+Not+Found';
+              }}
+            />
+            {product.category && (
+              <span className="absolute top-4 left-4 bg-black/80 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                {product.category}
+              </span>
             )}
           </div>
 
-          {/* Product Details Section */}
+          {/* Product Details */}
           <div className="flex flex-col justify-between space-y-6">
-            <div className="space-y-4">
-              
-              {/* Category & Design Badges */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-[0.3em] font-semibold text-neutral-500">
-                  {product.category || 'Graphic Tees'}
-                </span>
-                {product.design_type && (
-                  <span className="rounded-full bg-neutral-200/60 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-neutral-700">
-                    {product.design_type.replace('_', ' ')}
-                  </span>
-                )}
-              </div>
-
-              {/* Title & Price */}
-              <h1 className="text-3xl font-black uppercase tracking-[0.1em] text-neutral-900 leading-tight">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight">
                 {product.name}
               </h1>
-              
-              <p className="text-2xl font-bold text-[#b88b58]">
-                ${Number(product.base_price).toFixed(2)}
+              <p className="text-2xl font-black text-black mt-2">
+                ₹{Number(product.base_price).toLocaleString('en-IN')}
               </p>
-
-              {/* Tagline / Description */}
-              {(product.tagline || product.description) && (
-                <p className="text-sm leading-relaxed text-neutral-600">
-                  {product.tagline || product.description}
+              {product.tagline && (
+                <p className="text-gray-600 text-sm mt-4 leading-relaxed">
+                  {product.tagline}
                 </p>
               )}
-
-              {/* Target Zone Info */}
-              {product.target_zone && (
-                <div className="pt-2 border-t border-black/10 text-xs text-neutral-500 uppercase tracking-widest">
-                  Print Location: <span className="font-semibold text-neutral-800">{product.target_zone}</span>
-                </div>
-              )}
             </div>
 
-            {/* Context Add to Cart Button */}
-            <div className="pt-4">
-              <AddToCartButton product={product} />
+            {/* Size Selector */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-3">
+                Select Size
+              </label>
+              <div className="flex gap-2">
+                {['S', 'M', 'L', 'XL', 'XXL'].map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => setSelectedSize(size)}
+                    className={`w-12 h-12 rounded-xl border text-sm font-bold transition-all ${
+                      selectedSize === size
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quantity Selector & Add to Cart */}
+            <div className="pt-6 border-t border-gray-100 space-y-4">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">
+                Quantity
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center bg-gray-100 border border-gray-200 rounded-xl p-1">
+                  <button
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-white text-black hover:bg-gray-200 transition-all"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="px-4 text-sm font-black text-black min-w-[30px] text-center">
+                    {quantity}
+                  </span>
+                  <button
+                    onClick={() => setQuantity((q) => q + 1)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-black text-white hover:bg-gray-800 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  className="flex-1 bg-black text-white text-sm font-bold py-3.5 px-6 rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-md active:scale-98"
+                >
+                  <ShoppingBag className="w-4 h-4" /> Add to Bag (₹{(product.base_price * quantity).toLocaleString('en-IN')})
+                </button>
+              </div>
             </div>
           </div>
-
         </div>
       </div>
     </main>
