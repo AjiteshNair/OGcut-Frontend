@@ -16,7 +16,7 @@ interface ZoneConfig {
 
 interface ZoneImageData {
   element: HTMLImageElement;
-  x: number; // Offset relative to zone center
+  x: number;
   y: number;
   scale: number;
   customWidth: number;
@@ -26,7 +26,6 @@ interface ZoneImageData {
 
 const CANVAS_SIZE = 2048;
 
-// Preset Color Options
 const PRESET_COLORS = [
   { name: 'Cream', hex: '#fffdd0' },
   { name: 'Teal', hex: '#008080' },
@@ -35,10 +34,36 @@ const PRESET_COLORS = [
   { name: 'Royal Blue', hex: '#002366' },
 ];
 
-// --- 3D T-SHIRT MODEL ---
-function Tshirt({ mergedTexture }: { mergedTexture: THREE.CanvasTexture | null }) {
+// Target Y-Rotations (in radians) for each placement zone
+const ZONE_ROTATIONS: Record<Zone, number> = {
+  front: 0,
+  back: Math.PI,
+  rightSleeve: -Math.PI / 2,
+  leftSleeve: Math.PI / 2,
+};
+
+// --- 3D T-SHIRT MODEL WITH ROTATION ANIMATIONS ---
+function Tshirt({
+  mergedTexture,
+  activeTab,
+  userInteracting,
+}: {
+  mergedTexture: THREE.CanvasTexture | null;
+  activeTab: Zone;
+  userInteracting: boolean;
+}) {
   const gltf = useGLTF('/oversized_t-shirt-optimized.glb');
   const groupRef = useRef<THREE.Group>(null);
+
+  // Animation States
+  const [isInitialSpinning, setIsInitialSpinning] = useState(true);
+  const spinProgress = useRef(0);
+  const targetRotationY = useRef(ZONE_ROTATIONS[activeTab]);
+
+  // Update target angle whenever placement zone tab changes
+  useEffect(() => {
+    targetRotationY.current = ZONE_ROTATIONS[activeTab];
+  }, [activeTab]);
 
   useEffect(() => {
     if (gltf && mergedTexture) {
@@ -56,9 +81,49 @@ function Tshirt({ mergedTexture }: { mergedTexture: THREE.CanvasTexture | null }
     }
   }, [gltf, mergedTexture]);
 
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += 0 * delta;
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+
+    // 1. Initial Spin with Real-World Physical Friction (Burst -> Coast -> Stop)
+    if (isInitialSpinning) {
+      // Advance progress from 0 to 1 over 2.0 seconds
+      spinProgress.current += delta / 2.0;
+
+      if (spinProgress.current >= 1) {
+        spinProgress.current = 1;
+        setIsInitialSpinning(false);
+        
+        // Lock rotation cleanly at exactly 0 (same as 2 * PI) to prevent counter-spinning
+        groupRef.current.rotation.y = targetRotationY.current; 
+        return;
+      }
+
+      // Ease-Out Quintic: Aggressive initial launch + smooth friction decay
+      const t = spinProgress.current;
+      const easeOutQuint = 1 - Math.pow(1 - t, 5);
+
+      // Apply exact rotation from start angle to target angle + 360 degrees
+      groupRef.current.rotation.y = targetRotationY.current + easeOutQuint * (Math.PI * 2);
+      return;
+    }
+
+    // 2. Smoothly rotate to selected zone when user isn't dragging
+    if (!userInteracting) {
+      // Interpolate base orientation towards target angle
+      const baseRotationY = THREE.MathUtils.lerp(
+        groupRef.current.rotation.y,
+        targetRotationY.current,
+        delta * 4
+      );
+
+      // 3. Horizontal Swaying Idle Motion (simulates gentle turntable/drag rotation)
+      const time = state.clock.getElapsedTime();
+      const idleSway = Math.sin(time * 1) * 0.008; // Adjust 0.08 to control sway width
+
+      groupRef.current.rotation.y = baseRotationY + idleSway;
+      groupRef.current.position.y = Math.sin(time * 1.5) * 0.008; // Keeps gentle vertical float
+    } else {
+      targetRotationY.current = groupRef.current.rotation.y;
     }
   });
 
@@ -71,14 +136,17 @@ function Tshirt({ mergedTexture }: { mergedTexture: THREE.CanvasTexture | null }
   );
 }
 
-useGLTF.preload('/shirt_1-optimized.glb');
+useGLTF.preload('/oversized_t-shirt-optimized.glb');
 
 // --- MAIN CONFIGURATOR WORKSPACE ---
 export default function TshirtConfigurator() {
   const [activeTab, setActiveTab] = useState<Zone>('front');
   const [fabricColor, setFabricColor] = useState<string>(PRESET_COLORS[0].hex);
 
-  // Calibrated Base Print Area Boundaries (Editable via Sliders)
+  // Interaction & Swipe Guide state
+  const [userInteracting, setUserInteracting] = useState(false);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [zones, setZones] = useState<Record<Zone, ZoneConfig>>({
     front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
     back: { x: 1536, y: 1325, clipWidth: 620, clipHeight: 911 },
@@ -87,7 +155,6 @@ export default function TshirtConfigurator() {
   });
 
   const [zoneImages, setZoneImages] = useState<Partial<Record<Zone, ZoneImageData>>>({});
-
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dynamicTexture, setDynamicTexture] = useState<THREE.CanvasTexture | null>(null);
 
@@ -106,7 +173,7 @@ export default function TshirtConfigurator() {
     };
   }, []);
 
-  // --- RENDER TEXTURE MAP ---
+  // Render Canvas Texture Map
   const renderCanvasMap = useCallback(() => {
     const canvas = liveCanvasRef.current;
     const texture = dynamicTexture;
@@ -115,51 +182,39 @@ export default function TshirtConfigurator() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 1. Base Fabric Color
     ctx.fillStyle = fabricColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 2. Draw Visible Printable Bounds Rectangles
     (Object.keys(zones) as Zone[]).forEach((key) => {
       const config = zones[key];
       const rx = config.x - config.clipWidth / 2;
       const ry = config.y - config.clipHeight / 2;
 
       ctx.save();
-      
-      // Light background tint to identify the area
       ctx.fillStyle = key === activeTab ? 'rgba(239, 68, 68, 0.08)' : 'rgba(0, 0, 0, 0.03)';
       ctx.fillRect(rx, ry, config.clipWidth, config.clipHeight);
 
-      // Dashed boundary stroke
       ctx.strokeStyle = key === activeTab ? '#ef4444' : '#94a3b8';
       ctx.lineWidth = key === activeTab ? 6 : 4;
       ctx.setLineDash([16, 12]);
       ctx.strokeRect(rx, ry, config.clipWidth, config.clipHeight);
-
       ctx.restore();
     });
 
-    // 3. Render Artwork
     (Object.keys(zones) as Zone[]).forEach((key) => {
       const config = zones[key];
       const imgData = zoneImages[key];
 
       if (imgData && imgData.element) {
         ctx.save();
-
-        // Clipping Mask around configured base print area box
         const rx = config.x - config.clipWidth / 2;
         const ry = config.y - config.clipHeight / 2;
         ctx.beginPath();
         ctx.rect(rx, ry, config.clipWidth, config.clipHeight);
         ctx.clip();
 
-        // Calculate final width and height using scales/dimensions
         const drawW = imgData.customWidth * imgData.scale;
         const drawH = imgData.customHeight * imgData.scale;
-
-        // Draw centered on target region
         const drawX = config.x + imgData.x - drawW / 2;
         const drawY = config.y + imgData.y - drawH / 2;
 
@@ -175,7 +230,6 @@ export default function TshirtConfigurator() {
     renderCanvasMap();
   }, [renderCanvasMap]);
 
-  // --- UPDATE BASE PRINT ZONE BOUNDARIES ---
   const updateZoneConfig = (fields: Partial<ZoneConfig>) => {
     setZones((prev) => ({
       ...prev,
@@ -186,7 +240,6 @@ export default function TshirtConfigurator() {
     }));
   };
 
-  // --- HANDLE FILE UPLOAD ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -196,7 +249,7 @@ export default function TshirtConfigurator() {
     img.onload = () => {
       const config = zones[activeTab];
       const aspect = img.width / img.height;
-      
+
       let initialW = config.clipWidth * 0.8;
       let initialH = initialW / aspect;
 
@@ -220,7 +273,6 @@ export default function TshirtConfigurator() {
     };
   };
 
-  // --- CONTROL UPDATERS ---
   const updateActiveZone = (fields: Partial<ZoneImageData>) => {
     setZoneImages((prev) => {
       const current = prev[activeTab];
@@ -270,12 +322,16 @@ export default function TshirtConfigurator() {
 
   return (
     <div className="flex flex-col lg:flex-row w-full h-screen bg-slate-100 overflow-hidden font-sans">
-      
       {/* 1. 3D VIEWPORT CONTAINER */}
-      <div className="w-full lg:w-1/2 h-[40vh] lg:h-full relative bg-slate-200 shrink-0">
+      <div
+        className="w-full lg:w-1/2 h-[40vh] lg:h-full relative bg-slate-200 shrink-0"
+      >
         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow z-10 pointer-events-none">
           3D Live Preview
         </div>
+
+        {/* SWIPE TO VIEW GUIDANCE OVERLAY */}
+
 
         <Canvas camera={{ position: [0, 0.8, 2], fov: 45 }} style={{ width: '100%', height: '100%' }}>
           <color attach="background" args={['#f8fafc']} />
@@ -285,21 +341,32 @@ export default function TshirtConfigurator() {
 
           <Suspense fallback={null}>
             <Center top position={[0, -0.1, 0]}>
-              <Tshirt mergedTexture={dynamicTexture} />
+              <Tshirt
+                mergedTexture={dynamicTexture}
+                activeTab={activeTab}
+                userInteracting={userInteracting}
+              />
             </Center>
           </Suspense>
 
-          <OrbitControls enableZoom={true} minDistance={1.2} maxDistance={5} target={[0, 0, 0]} />
+          <OrbitControls enableZoom={true} 
+            minDistance={1.9} 
+            maxDistance={2.5} 
+            target={[0, 0, 0]} 
+            minPolarAngle={Math.PI / 4}   // Prevents looking too far down from above (~45°)
+            maxPolarAngle={Math.PI / 1.8} // Prevents looking underneath the shirt (~100°)
+          />
         </Canvas>
       </div>
 
       {/* 2. SCROLLABLE EDITING SIDEBAR */}
       <div className="w-full lg:w-1/2 h-[60vh] lg:h-full bg-white flex flex-col overflow-y-auto z-10">
-        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-70">
-          
+        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-32">
           <div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">Design Studio</h1>
-            <p className="text-xs text-slate-500">Configure fabric colors, adjust UV base print areas, and align graphics.</p>
+            <p className="text-xs text-slate-500">
+              Configure fabric colors, adjust UV base print areas, and align graphics.
+            </p>
           </div>
 
           {/* PRESET FABRIC COLORS */}
@@ -316,7 +383,11 @@ export default function TshirtConfigurator() {
                   }`}
                   style={{ backgroundColor: c.hex }}
                 >
-                  <span className={`text-[9px] font-extrabold uppercase ${c.name === 'Cream' ? 'text-slate-800' : 'text-white'}`}>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase ${
+                      c.name === 'Cream' ? 'text-slate-800' : 'text-white'
+                    }`}
+                  >
                     {c.name.split(' ')[0]}
                   </span>
                 </button>
@@ -331,7 +402,9 @@ export default function TshirtConfigurator() {
               {(Object.keys(zones) as Zone[]).map((zoneKey) => (
                 <button
                   key={zoneKey}
-                  onClick={() => setActiveTab(zoneKey)}
+                  onClick={() => {
+                    setActiveTab(zoneKey);
+                  }}
                   className={`py-2 px-1 text-[11px] font-bold rounded-lg transition-all uppercase ${
                     activeTab === zoneKey
                       ? 'bg-slate-900 text-white shadow'
@@ -357,16 +430,17 @@ export default function TshirtConfigurator() {
             />
           </div>
 
-          {/* BASE PRINT AREA CALIBRATION (UV SLIDERS) */}
+          {/* BASE PRINT AREA CALIBRATION */}
           <div className="space-y-4 bg-amber-50/70 border border-amber-200 p-4 rounded-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
                 4. Base Print Area Calibration ({activeTab.toUpperCase()})
               </h3>
-              <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-semibold">UV Grid Config</span>
+              <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-semibold">
+                UV Grid Config
+              </span>
             </div>
 
-            {/* BASE ZONE X CENTER */}
             <div>
               <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
                 <span>Print Area Center X:</span>
@@ -383,7 +457,6 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* BASE ZONE Y CENTER */}
             <div>
               <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
                 <span>Print Area Center Y:</span>
@@ -400,7 +473,6 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* BASE ZONE CLIP WIDTH */}
             <div>
               <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
                 <span>Max Print Width Limit:</span>
@@ -417,7 +489,6 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* BASE ZONE CLIP HEIGHT */}
             <div>
               <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
                 <span>Max Print Height Limit:</span>
@@ -437,7 +508,9 @@ export default function TshirtConfigurator() {
 
           {/* PREVIEW CONTAINER */}
           <div className="space-y-2 border-t border-slate-100 pt-4">
-            <label className="block text-xs font-bold text-slate-700">Artwork Layout & Boundary Preview</label>
+            <label className="block text-xs font-bold text-slate-700">
+              Artwork Layout & Boundary Preview
+            </label>
             <div className="relative w-full h-44 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center select-none">
               <div
                 style={{
@@ -474,13 +547,16 @@ export default function TshirtConfigurator() {
 
           {/* POSITION & SIZING CONTROLS */}
           <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Artwork Precision Controls</h3>
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Artwork Precision Controls
+            </h3>
 
-            {/* HORIZONTAL POSITION */}
             <div>
               <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
                 <span>Position Left / Right:</span>
-                <span className="font-mono font-bold text-slate-900">{activeZoneImage ? Math.round(activeZoneImage.x) : 0}px</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {activeZoneImage ? Math.round(activeZoneImage.x) : 0}px
+                </span>
               </div>
               <input
                 type="range"
@@ -494,11 +570,12 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* VERTICAL POSITION */}
             <div>
               <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
                 <span>Position Up / Down:</span>
-                <span className="font-mono font-bold text-slate-900">{activeZoneImage ? Math.round(activeZoneImage.y) : 0}px</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {activeZoneImage ? Math.round(activeZoneImage.y) : 0}px
+                </span>
               </div>
               <input
                 type="range"
@@ -512,11 +589,12 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* SIZING OPTION 1: SCALE */}
             <div>
               <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
                 <span>Zoom / Scale Factor:</span>
-                <span className="font-mono font-bold text-slate-900">{activeZoneImage ? activeZoneImage.scale.toFixed(2) : 1}x</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {activeZoneImage ? activeZoneImage.scale.toFixed(2) : 1}x
+                </span>
               </div>
               <input
                 type="range"
@@ -530,7 +608,6 @@ export default function TshirtConfigurator() {
               />
             </div>
 
-            {/* SIZING OPTION 2: EXPLICIT DIMENSIONS */}
             <div className="pt-2 border-t border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700">Explicit Dimensions</span>
@@ -546,11 +623,12 @@ export default function TshirtConfigurator() {
                 </label>
               </div>
 
-              {/* WIDTH SLIDER */}
               <div>
                 <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
                   <span>Width:</span>
-                  <span className="font-mono font-bold text-slate-900">{activeZoneImage ? activeZoneImage.customWidth : 0}px</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {activeZoneImage ? activeZoneImage.customWidth : 0}px
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -564,11 +642,12 @@ export default function TshirtConfigurator() {
                 />
               </div>
 
-              {/* HEIGHT SLIDER */}
               <div>
                 <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
                   <span>Height:</span>
-                  <span className="font-mono font-bold text-slate-900">{activeZoneImage ? activeZoneImage.customHeight : 0}px</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {activeZoneImage ? activeZoneImage.customHeight : 0}px
+                  </span>
                 </div>
                 <input
                   type="range"
@@ -582,12 +661,9 @@ export default function TshirtConfigurator() {
                 />
               </div>
             </div>
-
           </div>
-
         </div>
       </div>
-
     </div>
   );
 }
