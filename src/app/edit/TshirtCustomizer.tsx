@@ -16,12 +16,38 @@ interface ZoneConfig {
 
 interface ZoneImageData {
   element: HTMLImageElement;
+  dataUrl: string;
   x: number;
   y: number;
   scale: number;
   customWidth: number;
   customHeight: number;
   lockAspectRatio: boolean;
+}
+
+export interface CustomizationPayload {
+  fabricColor: string;
+  placements: Array<{
+    zone: Zone;
+    image: string; // Base64 Data URL
+    coordinates: {
+      x: number;
+      y: number;
+      scale: number;
+      width: number;
+      height: number;
+    };
+    printZoneBounds: {
+      centerX: number;
+      centerY: number;
+      clipWidth: number;
+      clipHeight: number;
+    };
+  }>;
+}
+
+interface TshirtConfiguratorProps {
+  onSubmitCustomization?: (payload: CustomizationPayload) => void;
 }
 
 const CANVAS_SIZE = 2048;
@@ -34,7 +60,6 @@ const PRESET_COLORS = [
   { name: 'Royal Blue', hex: '#002366' },
 ];
 
-// Target Y-Rotations (in radians) for each placement zone
 const ZONE_ROTATIONS: Record<Zone, number> = {
   front: 0,
   back: Math.PI,
@@ -42,7 +67,6 @@ const ZONE_ROTATIONS: Record<Zone, number> = {
   leftSleeve: Math.PI / 2,
 };
 
-// --- 3D T-SHIRT MODEL WITH ROTATION ANIMATIONS ---
 function Tshirt({
   mergedTexture,
   activeTab,
@@ -55,12 +79,10 @@ function Tshirt({
   const gltf = useGLTF('/oversized_t-shirt-optimized.glb');
   const groupRef = useRef<THREE.Group>(null);
 
-  // Animation States
   const [isInitialSpinning, setIsInitialSpinning] = useState(true);
   const spinProgress = useRef(0);
   const targetRotationY = useRef(ZONE_ROTATIONS[activeTab]);
 
-  // Update target angle whenever placement zone tab changes
   useEffect(() => {
     targetRotationY.current = ZONE_ROTATIONS[activeTab];
   }, [activeTab]);
@@ -84,44 +106,34 @@ function Tshirt({
   useFrame((state, delta) => {
     if (!groupRef.current) return;
 
-    // 1. Initial Spin with Real-World Physical Friction (Burst -> Coast -> Stop)
     if (isInitialSpinning) {
-      // Advance progress from 0 to 1 over 2.0 seconds
       spinProgress.current += delta / 2.0;
 
       if (spinProgress.current >= 1) {
         spinProgress.current = 1;
         setIsInitialSpinning(false);
-        
-        // Lock rotation cleanly at exactly 0 (same as 2 * PI) to prevent counter-spinning
-        groupRef.current.rotation.y = targetRotationY.current; 
+        groupRef.current.rotation.y = targetRotationY.current;
         return;
       }
 
-      // Ease-Out Quintic: Aggressive initial launch + smooth friction decay
       const t = spinProgress.current;
       const easeOutQuint = 1 - Math.pow(1 - t, 5);
-
-      // Apply exact rotation from start angle to target angle + 360 degrees
       groupRef.current.rotation.y = targetRotationY.current + easeOutQuint * (Math.PI * 2);
       return;
     }
 
-    // 2. Smoothly rotate to selected zone when user isn't dragging
     if (!userInteracting) {
-      // Interpolate base orientation towards target angle
       const baseRotationY = THREE.MathUtils.lerp(
         groupRef.current.rotation.y,
         targetRotationY.current,
         delta * 4
       );
 
-      // 3. Horizontal Swaying Idle Motion (simulates gentle turntable/drag rotation)
       const time = state.clock.getElapsedTime();
-      const idleSway = Math.sin(time * 1) * 0.008; // Adjust 0.08 to control sway width
+      const idleSway = Math.sin(time * 1.5) * 0.003;
 
       groupRef.current.rotation.y = baseRotationY + idleSway;
-      groupRef.current.position.y = Math.sin(time * 1.5) * 0.008; // Keeps gentle vertical float
+      groupRef.current.position.y = Math.sin(time * 1.5) * 0.008;
     } else {
       targetRotationY.current = groupRef.current.rotation.y;
     }
@@ -138,14 +150,11 @@ function Tshirt({
 
 useGLTF.preload('/oversized_t-shirt-optimized.glb');
 
-// --- MAIN CONFIGURATOR WORKSPACE ---
-export default function TshirtConfigurator() {
+export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConfiguratorProps) {
   const [activeTab, setActiveTab] = useState<Zone>('front');
   const [fabricColor, setFabricColor] = useState<string>(PRESET_COLORS[0].hex);
-
-  // Interaction & Swipe Guide state
-  const [userInteracting, setUserInteracting] = useState(false);
-  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [userInteracting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [zones, setZones] = useState<Record<Zone, ZoneConfig>>({
     front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
@@ -173,7 +182,6 @@ export default function TshirtConfigurator() {
     };
   }, []);
 
-  // Render Canvas Texture Map
   const renderCanvasMap = useCallback(() => {
     const canvas = liveCanvasRef.current;
     const texture = dynamicTexture;
@@ -244,33 +252,39 @@ export default function TshirtConfigurator() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    img.onload = () => {
-      const config = zones[activeTab];
-      const aspect = img.width / img.height;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const img = new Image();
+      img.src = dataUrl;
+      img.onload = () => {
+        const config = zones[activeTab];
+        const aspect = img.width / img.height;
 
-      let initialW = config.clipWidth * 0.8;
-      let initialH = initialW / aspect;
+        let initialW = config.clipWidth * 0.8;
+        let initialH = initialW / aspect;
 
-      if (initialH > config.clipHeight * 0.8) {
-        initialH = config.clipHeight * 0.8;
-        initialW = initialH * aspect;
-      }
+        if (initialH > config.clipHeight * 0.8) {
+          initialH = config.clipHeight * 0.8;
+          initialW = initialH * aspect;
+        }
 
-      setZoneImages((prev) => ({
-        ...prev,
-        [activeTab]: {
-          element: img,
-          x: 0,
-          y: 0,
-          scale: 1,
-          customWidth: Math.round(initialW),
-          customHeight: Math.round(initialH),
-          lockAspectRatio: true,
-        },
-      }));
+        setZoneImages((prev) => ({
+          ...prev,
+          [activeTab]: {
+            element: img,
+            dataUrl,
+            x: 0,
+            y: 0,
+            scale: 1,
+            customWidth: Math.round(initialW),
+            customHeight: Math.round(initialH),
+            lockAspectRatio: true,
+          },
+        }));
+      };
     };
+    reader.readAsDataURL(file);
   };
 
   const updateActiveZone = (fields: Partial<ZoneImageData>) => {
@@ -317,21 +331,83 @@ export default function TshirtConfigurator() {
     }
   };
 
+  const handleProcessDesign = async () => {
+    const configuredZones = (Object.keys(zoneImages) as Zone[]).filter(
+      (key) => zoneImages[key] !== undefined
+    );
+
+    if (configuredZones.length === 0) {
+      alert('Please upload artwork to at least one zone.');
+      return;
+    }
+
+    const payload: CustomizationPayload = {
+      fabricColor,
+      placements: configuredZones.map((zKey) => {
+        const imgData = zoneImages[zKey]!;
+        const config = zones[zKey];
+
+        return {
+          zone: zKey,
+          image: imgData.dataUrl,
+          coordinates: {
+            x: imgData.x,
+            y: imgData.y,
+            scale: imgData.scale,
+            width: imgData.customWidth,
+            height: imgData.customHeight,
+          },
+          printZoneBounds: {
+            centerX: config.x,
+            centerY: config.y,
+            clipWidth: config.clipWidth,
+            clipHeight: config.clipHeight,
+          },
+        };
+      }),
+    };
+
+    if (onSubmitCustomization) {
+      onSubmitCustomization(payload);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:3001';
+      
+      const response = await fetch(`${backendUrl}/api/cart/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to process custom design.');
+      }
+
+      const result = await response.json();
+      alert(`Design saved successfully! Order ID: ${result.orderId}`);
+    } catch (err: any) {
+      console.error('Export Request Error:', err);
+      alert(`Failed to save design: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const activeZoneConfig = zones[activeTab];
   const activeZoneImage = zoneImages[activeTab];
 
   return (
     <div className="flex flex-col lg:flex-row w-full h-screen bg-slate-100 overflow-hidden font-sans">
-      {/* 1. 3D VIEWPORT CONTAINER */}
-      <div
-        className="w-full lg:w-1/2 h-[40vh] lg:h-full relative bg-slate-200 shrink-0"
-      >
+      <div className="w-full lg:w-1/2 h-[40vh] lg:h-full relative bg-slate-200 shrink-0">
         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-md text-xs font-bold text-slate-800 shadow z-10 pointer-events-none">
           3D Live Preview
         </div>
-
-        {/* SWIPE TO VIEW GUIDANCE OVERLAY */}
-
 
         <Canvas camera={{ position: [0, 0.8, 2], fov: 45 }} style={{ width: '100%', height: '100%' }}>
           <color attach="background" args={['#f8fafc']} />
@@ -349,19 +425,19 @@ export default function TshirtConfigurator() {
             </Center>
           </Suspense>
 
-          <OrbitControls enableZoom={true} 
-            minDistance={1.9} 
-            maxDistance={2.5} 
-            target={[0, 0, 0]} 
-            minPolarAngle={Math.PI / 4}   // Prevents looking too far down from above (~45°)
-            maxPolarAngle={Math.PI / 1.8} // Prevents looking underneath the shirt (~100°)
+          <OrbitControls
+            enableZoom={true}
+            minDistance={1.9}
+            maxDistance={2.5}
+            target={[0, 0, 0]}
+            minPolarAngle={Math.PI / 4}
+            maxPolarAngle={Math.PI / 1.8}
           />
         </Canvas>
       </div>
 
-      {/* 2. SCROLLABLE EDITING SIDEBAR */}
       <div className="w-full lg:w-1/2 h-[60vh] lg:h-full bg-white flex flex-col overflow-y-auto z-10">
-        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-32">
+        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-70">
           <div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">Design Studio</h1>
             <p className="text-xs text-slate-500">
@@ -369,7 +445,6 @@ export default function TshirtConfigurator() {
             </p>
           </div>
 
-          {/* PRESET FABRIC COLORS */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">1. Select Shirt Color</label>
             <div className="grid grid-cols-5 gap-2">
@@ -395,16 +470,13 @@ export default function TshirtConfigurator() {
             </div>
           </div>
 
-          {/* ZONE SELECTION TABS */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">2. Placement Area</label>
             <div className="grid grid-cols-4 gap-1.5">
               {(Object.keys(zones) as Zone[]).map((zoneKey) => (
                 <button
                   key={zoneKey}
-                  onClick={() => {
-                    setActiveTab(zoneKey);
-                  }}
+                  onClick={() => setActiveTab(zoneKey)}
                   className={`py-2 px-1 text-[11px] font-bold rounded-lg transition-all uppercase ${
                     activeTab === zoneKey
                       ? 'bg-slate-900 text-white shadow'
@@ -417,7 +489,6 @@ export default function TshirtConfigurator() {
             </div>
           </div>
 
-          {/* FILE UPLOAD */}
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">
               3. Upload Design ({activeTab.toUpperCase()})
@@ -430,7 +501,6 @@ export default function TshirtConfigurator() {
             />
           </div>
 
-          {/* BASE PRINT AREA CALIBRATION */}
           <div className="space-y-4 bg-amber-50/70 border border-amber-200 p-4 rounded-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
@@ -506,7 +576,6 @@ export default function TshirtConfigurator() {
             </div>
           </div>
 
-          {/* PREVIEW CONTAINER */}
           <div className="space-y-2 border-t border-slate-100 pt-4">
             <label className="block text-xs font-bold text-slate-700">
               Artwork Layout & Boundary Preview
@@ -545,7 +614,6 @@ export default function TshirtConfigurator() {
             </div>
           </div>
 
-          {/* POSITION & SIZING CONTROLS */}
           <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
               Artwork Precision Controls
@@ -661,6 +729,16 @@ export default function TshirtConfigurator() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={handleProcessDesign}
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-lg transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Uploading & Exporting...' : 'Export Design & Coordinates'}
+            </button>
           </div>
         </div>
       </div>
