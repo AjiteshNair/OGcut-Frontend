@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CartProvider } from "../context/CartContext";
+import { CartProvider } from "../components/CartContext";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 

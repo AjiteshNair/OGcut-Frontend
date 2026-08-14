@@ -1,6 +1,6 @@
 'use client';
 
-import { useCart } from '@/context/CartContext';
+import { useCart } from '@/components/CartContext';
 import Link from 'next/link';
 
 interface Props {

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, OrbitControls, Center } from '@react-three/drei';
 import * as THREE from 'three';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type Zone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
 
@@ -150,7 +151,11 @@ function Tshirt({
 
 useGLTF.preload('/oversized_t-shirt-optimized.glb');
 
-export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConfiguratorProps) {
+function TshirtConfiguratorContent({ onSubmitCustomization }: TshirtConfiguratorProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get('editId');
+
   const [activeTab, setActiveTab] = useState<Zone>('front');
   const [fabricColor, setFabricColor] = useState<string>(PRESET_COLORS[0].hex);
   const [userInteracting] = useState(false);
@@ -166,6 +171,71 @@ export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConf
   const [zoneImages, setZoneImages] = useState<Partial<Record<Zone, ZoneImageData>>>({});
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dynamicTexture, setDynamicTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  // --- Cart Item Rehydration Logic ---
+  useEffect(() => {
+    if (!editId) return;
+
+    const savedCartRaw = localStorage.getItem('cart_items');
+    if (!savedCartRaw) return;
+
+    try {
+      const savedCart = JSON.parse(savedCartRaw);
+      const itemToEdit = savedCart.find((item: any) => item.id === editId);
+
+      if (!itemToEdit) return;
+
+      if (itemToEdit.fabricColor) {
+        setFabricColor(itemToEdit.fabricColor);
+      }
+
+      if (itemToEdit.placements && Array.isArray(itemToEdit.placements)) {
+        const restoredImages: Partial<Record<Zone, ZoneImageData>> = {};
+        let loaded = 0;
+
+        itemToEdit.placements.forEach((placement: any) => {
+          const imageSrc = placement.image || placement.dataUrl;
+          if (!imageSrc) return;
+
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = imageSrc;
+
+          const handleLoadOrError = () => {
+            loaded++;
+            if (loaded === itemToEdit.placements.length) {
+              setZoneImages((prev) => ({
+                ...prev,
+                ...restoredImages,
+              }));
+            }
+          };
+
+          img.onload = () => {
+            const coords = placement.coordinates || placement;
+            const zKey = (placement.zone || 'front') as Zone;
+
+            restoredImages[zKey] = {
+              element: img,
+              dataUrl: imageSrc,
+              x: coords.x ?? 0,
+              y: coords.y ?? 0,
+              scale: coords.scale ?? 1,
+              customWidth: coords.width ?? coords.customWidth ?? 400,
+              customHeight: coords.height ?? coords.customHeight ?? 400,
+              lockAspectRatio: true,
+            };
+
+            handleLoadOrError();
+          };
+
+          img.onerror = handleLoadOrError;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to rehydrate item for editing:', err);
+    }
+  }, [editId]);
 
   useEffect(() => {
     const canvas = document.createElement('canvas');
@@ -331,13 +401,13 @@ export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConf
     }
   };
 
-  const handleProcessDesign = async () => {
+  const handleAddToCart = async () => {
     const configuredZones = (Object.keys(zoneImages) as Zone[]).filter(
       (key) => zoneImages[key] !== undefined
     );
 
     if (configuredZones.length === 0) {
-      alert('Please upload artwork to at least one zone.');
+      alert('Please upload artwork to at least one zone before adding to cart.');
       return;
     }
 
@@ -374,26 +444,33 @@ export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConf
 
     try {
       setIsSubmitting(true);
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:3001';
-      
-      const response = await fetch(`${backendUrl}/api/cart/add`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      const existingCart = JSON.parse(localStorage.getItem('cart_items') || '[]');
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to process custom design.');
+      // If editing an existing item, replace it in the array
+      const newItemId = editId || `cart_${Date.now()}`;
+      const updatedCartItem = {
+        id: newItemId,
+        fabricColor: payload.fabricColor,
+        placements: payload.placements,
+        price: 499,
+      };
+
+      if (editId) {
+        const itemIndex = existingCart.findIndex((item: any) => item.id === editId);
+        if (itemIndex > -1) {
+          existingCart[itemIndex] = updatedCartItem;
+        } else {
+          existingCart.push(updatedCartItem);
+        }
+      } else {
+        existingCart.push(updatedCartItem);
       }
 
-      const result = await response.json();
-      alert(`Design saved successfully! Order ID: ${result.orderId}`);
+      localStorage.setItem('cart_items', JSON.stringify(existingCart));
+      router.push('/cart');
     } catch (err: any) {
-      console.error('Export Request Error:', err);
-      alert(`Failed to save design: ${err.message}`);
+      console.error('Add to Cart Error:', err);
+      alert(`Failed to add item to cart: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -437,7 +514,7 @@ export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConf
       </div>
 
       <div className="w-full lg:w-1/2 h-[60vh] lg:h-full bg-white flex flex-col overflow-y-auto z-10">
-        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-70">
+        <div className="p-6 space-y-6 max-w-md mx-auto w-full pb-28">
           <div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">Design Studio</h1>
             <p className="text-xs text-slate-500">
@@ -733,15 +810,29 @@ export default function TshirtConfigurator({ onSubmitCustomization }: TshirtConf
 
           <div className="pt-2">
             <button
-              onClick={handleProcessDesign}
+              onClick={handleAddToCart}
               disabled={isSubmitting}
               className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-lg transition-all duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Uploading & Exporting...' : 'Export Design & Coordinates'}
+              {isSubmitting ? 'Adding to Cart...' : '🛒 Add to Cart'}
             </button>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TshirtConfigurator(props: TshirtConfiguratorProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full h-screen bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+          Loading Design Studio...
+        </div>
+      }
+    >
+      <TshirtConfiguratorContent {...props} />
+    </Suspense>
   );
 }
