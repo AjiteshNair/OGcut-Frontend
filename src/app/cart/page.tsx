@@ -21,14 +21,12 @@ const DEFAULT_ZONES: Record<Zone, ZoneConfig> = {
 function MiniTshirt({ texture }: { texture: THREE.CanvasTexture | null }) {
   const gltf = useGLTF('/oversized_t-shirt-optimized.glb');
 
-  // 1. Clone the scene so each cart item gets its own distinct 3D object
   const clonedScene = React.useMemo(() => gltf.scene.clone(true), [gltf.scene]);
 
   useEffect(() => {
     if (clonedScene && texture) {
       clonedScene.traverse((child: any) => {
         if (child.isMesh) {
-          // Clone material so texture changes on item A don't bleed onto item B
           child.material = child.material.clone();
           child.material.map = texture;
           child.material.roughness = 1;
@@ -43,6 +41,7 @@ function MiniTshirt({ texture }: { texture: THREE.CanvasTexture | null }) {
   if (!clonedScene) return null;
   return <primitive object={clonedScene} />;
 }
+
 function CartItemModel({ item }: { item: CartItem }) {
   const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
 
@@ -56,7 +55,6 @@ function CartItemModel({ item }: { item: CartItem }) {
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
 
-    // Fill fabric color
     ctx.fillStyle = item.fabricColor || '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -65,7 +63,6 @@ function CartItemModel({ item }: { item: CartItem }) {
       return;
     }
 
-    // Preload placement artwork asynchronously onto 2D canvas
     const imagePromises = item.placements.map((p) => {
       return new Promise<void>((resolve) => {
         if (!p.image) return resolve();
@@ -126,14 +123,44 @@ function CartItemModel({ item }: { item: CartItem }) {
 
 export default function CartPage() {
   const router = useRouter();
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // User Auth State
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Auth Modal States
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem('cart_items');
       if (savedCart) {
         setCartItems(JSON.parse(savedCart));
+      }
+
+      // Check login status
+      const token = localStorage.getItem('token');
+      if (token) {
+        setIsLoggedIn(true);
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            setUserEmail(parsed.email);
+          } catch (e) {
+            /* ignore parse error */
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to load cart items:', err);
@@ -182,6 +209,65 @@ export default function CartPage() {
     return cartItems.reduce((acc, item) => acc + (item.price || 499) * (item.quantity || 1), 0);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
+    setUserEmail(null);
+  };
+
+  const handleProceedToCheckout = () => {
+    localStorage.setItem('cart', JSON.stringify(cartItems));
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setShowAuthModal(true);
+    } else {
+      router.push('/checkout');
+    }
+  };
+
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+
+    const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+    const payload =
+      authMode === 'login' ? { email, password } : { name, email, password };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const token = data.access_token || data.token;
+        if (token) {
+          localStorage.setItem('token', token);
+        }
+
+        const userObj = data.user || { email, name };
+        localStorage.setItem('user', JSON.stringify(userObj));
+        setUserEmail(userObj.email);
+        setIsLoggedIn(true);
+
+        setShowAuthModal(false);
+        router.push('/checkout');
+      } else {
+        setAuthError(data.message || `Failed to ${authMode}. Please check your details.`);
+      }
+    } catch (err) {
+      setAuthError('Connection error. Please try again.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -200,12 +286,40 @@ export default function CartPage() {
               Review your customized garments, sizes, and print placements.
             </p>
           </div>
-          <Link
-            href="/edit"
-            className="py-2 px-4 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
-          >
-            + New Design
-          </Link>
+
+          <div className="flex items-center gap-3">
+            {/* Logged-In Badge / Sign In Trigger */}
+            {isLoggedIn ? (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="max-w-[140px] truncate">{userEmail || 'Logged In'}</span>
+                <button
+                  onClick={handleLogout}
+                  className="ml-1 text-slate-400 hover:text-red-600 transition font-bold"
+                  title="Logout"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthMode('login');
+                  setShowAuthModal(true);
+                }}
+                className="text-xs font-bold text-slate-600 hover:text-slate-900 underline"
+              >
+                Sign In
+              </button>
+            )}
+
+            <Link
+              href="/edit"
+              className="py-2 px-4 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
+            >
+              + New Design
+            </Link>
+          </div>
         </div>
 
         {cartItems.length === 0 ? (
@@ -226,7 +340,6 @@ export default function CartPage() {
                   key={item.id}
                   className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center"
                 >
-                  {/* Interactive 3D Model Thumbnail */}
                   <CartItemModel item={item} />
 
                   <div className="flex-1 space-y-2 text-center sm:text-left w-full">
@@ -334,8 +447,8 @@ export default function CartPage() {
               </div>
 
               <button
-                onClick={() => alert('Proceeding to checkout...')}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow transition"
+                onClick={handleProceedToCheckout}
+                className="w-full py-3.5 bg-amber-500 text-black font-bold rounded-xl hover:bg-amber-400 transition shadow-lg shadow-amber-500/20"
               >
                 Proceed to Checkout
               </button>
@@ -343,6 +456,132 @@ export default function CartPage() {
           </div>
         )}
       </div>
+
+      {/* LOGIN & REGISTER POPUP MODAL */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl max-w-md w-full space-y-4 relative shadow-2xl">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 text-neutral-400 hover:text-white text-lg font-bold"
+            >
+              ✕
+            </button>
+
+            {/* Mode Switch Tabs */}
+            <div className="flex border-b border-neutral-800 pb-3 gap-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+                className={`text-lg font-bold transition ${
+                  authMode === 'login'
+                    ? 'text-white border-b-2 border-amber-500 pb-1 -mb-[13px]'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthError('');
+                }}
+                className={`text-lg font-bold transition ${
+                  authMode === 'register'
+                    ? 'text-white border-b-2 border-amber-500 pb-1 -mb-[13px]'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400">
+              {authMode === 'login'
+                ? 'Log in to your account to proceed with checkout.'
+                : 'Create a new account to save your custom designs and checkout.'}
+            </p>
+
+            {authError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg">
+                {authError}
+              </div>
+            )}
+
+            <form onSubmit={handleAuthSubmit} className="space-y-3">
+              {authMode === 'register' && (
+                <div>
+                  <label className="block text-xs text-neutral-400 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    placeholder="John Doe"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs text-neutral-400 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-400 mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50 mt-2 text-sm"
+              >
+                {authLoading
+                  ? 'Processing...'
+                  : authMode === 'login'
+                  ? 'Login & Continue to Checkout'
+                  : 'Register & Continue to Checkout'}
+              </button>
+            </form>
+
+            <div className="text-center pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode(authMode === 'login' ? 'register' : 'login');
+                  setAuthError('');
+                }}
+                className="text-xs text-neutral-400 hover:text-white underline"
+              >
+                {authMode === 'login'
+                  ? "Don't have an account? Sign up"
+                  : 'Already have an account? Log in'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

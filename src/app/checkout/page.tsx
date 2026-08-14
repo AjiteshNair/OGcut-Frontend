@@ -1,319 +1,509 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, Plus, CheckCircle, Phone } from 'lucide-react';
 
 interface Address {
   id: string;
-  label: string;
+  fullName: string;
   phone: string;
   line1: string;
   line2?: string;
   city: string;
   state: string;
   pincode: string;
+  isDefault?: boolean;
+}
+
+interface UserProfile {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface OrderItemPayload {
+  productId?: number;
+  designId?: string;
+  customShirtOrder?: {
+    fabricColor: string;
+    placements: Array<{
+      zone: string;
+      imageUrl: string;
+      x: number;
+      y: number;
+      scale: number;
+      width: number;
+      height: number;
+      centerX: number;
+      centerY: number;
+      clipWidth: number;
+      clipHeight: number;
+    }>;
+  };
+  quantity: number;
+  size?: string;
+  price: number;
+  fabricColor?: string;
 }
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+  // State
+  const [step, setStep] = useState<'auth' | 'address' | 'payment'>('auth');
+  const [cartItems, setCartItems] = useState<OrderItemPayload[]>([]);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  
+  // Auth Form State
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+
+  // Address State
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
+    fullName: '',
+    phone: '',
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    pincode: '',
+    isDefault: false,
+  });
 
-  // New Address Form State
-  const [label, setLabel] = useState('Home');
-  const [phone, setPhone] = useState('');
-  const [line1, setLine1] = useState('');
-  const [line2, setLine2] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [loadingPincode, setLoadingPincode] = useState(false);
-  const [savingAddress, setSavingAddress] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
 
+  // Calculate Order Total
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const shipping = subtotal > 0 ? 50 : 0;
+  const grandTotal = subtotal + shipping;
+
+  // Load Cart & User Session
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-
-    if (!token || !storedUser) {
-      router.push('/auth?redirect=/checkout');
-      return;
+    const storedCart = localStorage.getItem('cart_items');
+    if (storedCart) {
+      try {
+        setCartItems(JSON.parse(storedCart));
+      } catch (e) {
+        console.error('Failed to parse cart items', e);
+      }
     }
 
-    const parsedUser = JSON.parse(storedUser);
-    setUser(parsedUser);
-    fetchAddresses(parsedUser.id);
-  }, [router]);
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchUserAndAddresses(token);
+    }
+  }, []);
 
-  const fetchAddresses = async (userId: string) => {
+  const fetchUserAndAddresses = async (token: string) => {
+    setLoading(true);
     try {
-      const res = await fetch('http://localhost:3001/addresses', {
-        headers: { 'x-user-id': userId },
+      // 1. Fetch Addresses
+      const addrRes = await fetch(`${API_BASE_URL}/addresses`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (addrRes.ok) {
+        const fetchedAddresses: Address[] = await addrRes.json();
+        setAddresses(fetchedAddresses);
+        if (fetchedAddresses.length > 0) {
+          const defaultAddr = fetchedAddresses.find((a) => a.isDefault) || fetchedAddresses[0];
+          setSelectedAddressId(defaultAddr.id);
+        } else {
+          setShowNewAddressForm(true);
+        }
+      }
+
+      setStep('address');
+    } catch (e) {
+      console.error('Failed to load user or addresses', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler: Login API Submit
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail.trim() || !authPassword.trim()) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail, password: authPassword }),
+      });
+
       if (res.ok) {
         const data = await res.json();
-        setAddresses(data);
-        if (data.length > 0) {
-          setSelectedAddressId(data[0].id);
-        } else {
-          setShowAddForm(true);
-        }
+        localStorage.setItem('token', data.access_token);
+        setUser(data.user);
+        await fetchUserAndAddresses(data.access_token);
+      } else {
+        alert('Invalid email or password');
       }
-    } catch (e) {
-      console.error('Failed to fetch addresses', e);
+    } catch (error) {
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setPincode(val);
-
-    if (val.length === 6) {
-      setLoadingPincode(true);
-      try {
-        const res = await fetch(`https://api.postalpincode.in/pincode/${val}`);
-        const data = await res.json();
-        if (data[0]?.Status === 'Success') {
-          const details = data[0].PostOffice[0];
-          setCity(details.District);
-          setState(details.State);
-        }
-      } catch (err) {
-        console.error('Failed to fetch pincode details', err);
-      } finally {
-        setLoadingPincode(false);
-      }
-    }
-  };
-
+  // Handler: Save New Address via Backend API
   const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingAddress(true);
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     try {
-      const res = await fetch('http://localhost:3001/addresses', {
+      const res = await fetch(`${API_BASE_URL}/addresses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': user.id,
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newAddress),
+      });
+
+      if (res.ok) {
+        const createdAddress: Address = await res.json();
+        setAddresses((prev) => [createdAddress, ...prev]);
+        setSelectedAddressId(createdAddress.id);
+        setShowNewAddressForm(false);
+        setNewAddress({
+          fullName: '',
+          phone: '',
+          line1: '',
+          line2: '',
+          city: '',
+          state: '',
+          pincode: '',
+          isDefault: false,
+        });
+      } else {
+        alert('Failed to save address');
+      }
+    } catch (error) {
+      console.error('Save address error:', error);
+    }
+  };
+
+  // Handler: Place Order via Backend API
+  const handlePlaceOrder = async () => {
+    const token = localStorage.getItem('token');
+    if (!token || !selectedAddressId) return;
+
+    setSubmittingOrder(true);
+    try {
+      const formattedItems = cartItems.map((item) => ({
+        productId: item.productId ?? null,
+        designId: item.designId ?? null,
+        customShirtOrder: item.customShirtOrder ?? null,
+        quantity: item.quantity,
+        size: item.size ?? 'M',
+        unitPrice: item.price,
+      }));
+
+      const res = await fetch(`${API_BASE_URL}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          label,
-          phone,
-          line1,
-          line2,
-          pincode,
-          city,
-          state,
+          addressId: selectedAddressId,
+          items: formattedItems,
         }),
       });
 
       if (res.ok) {
-        const newAddress = await res.json();
-        setAddresses([newAddress, ...addresses]);
-        setSelectedAddressId(newAddress.id);
-        setShowAddForm(false);
-        // Reset inputs
-        setLine1('');
-        setLine2('');
-        setPincode('');
-        setPhone('');
+        const order = await res.json();
+        localStorage.removeItem('cart');
+        router.push(`/order-success?orderId=${order.id}`);
+      } else {
+        const err = await res.json();
+        alert(`Order placement failed: ${err.message || 'Error occurred'}`);
       }
-    } catch (err) {
-      console.error('Failed to save address', err);
+    } catch (error) {
+      console.error('Place order error:', error);
     } finally {
-      setSavingAddress(false);
+      setSubmittingOrder(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-black uppercase tracking-wider mb-6">Checkout</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Main Section: Addresses */}
-        <div className="md:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-black" /> Delivery Address
+    <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
+      <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* LEFT COLUMN: Steps */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* STEP 1: AUTHENTICATION */}
+          <div className={`p-6 rounded-xl border ${step === 'auth' ? 'border-amber-500 bg-neutral-900' : 'border-neutral-800 bg-neutral-900/50'}`}>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="w-7 h-7 rounded-full bg-amber-500 text-black flex items-center justify-center text-sm font-bold">1</span>
+                Account Authentication
               </h2>
-              {addresses.length > 0 && !showAddForm && (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="text-xs font-bold text-black flex items-center gap-1 hover:underline"
-                >
-                  <Plus className="w-4 h-4" /> Add New Address
-                </button>
+              {step !== 'auth' && (
+                <button onClick={() => setStep('auth')} className="text-xs text-amber-500 underline">Switch Account</button>
               )}
             </div>
 
-            {/* List Saved Addresses */}
-            {!showAddForm && (
-              <div className="space-y-3">
-                {addresses.map((addr) => (
-                  <div
-                    key={addr.id}
-                    onClick={() => setSelectedAddressId(addr.id)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start justify-between ${
-                      selectedAddressId === addr.id
-                        ? 'border-black bg-gray-50 ring-1 ring-black'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                          {addr.label}
-                        </span>
-                        <span className="text-xs text-gray-500 font-semibold flex items-center gap-1">
-                          <Phone className="w-3 h-3" /> {addr.phone}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">{addr.line1}</p>
-                      {addr.line2 && <p className="text-xs text-gray-600">{addr.line2}</p>}
-                      <p className="text-xs text-gray-500 mt-1">
-                        {addr.city}, {addr.state} - <span className="font-bold text-gray-800">{addr.pincode}</span>
-                      </p>
-                    </div>
-                    {selectedAddressId === addr.id && (
-                      <CheckCircle className="w-5 h-5 text-black shrink-0" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add New Address Form */}
-            {showAddForm && (
-              <form onSubmit={handleSaveAddress} className="space-y-4">
-                <div className="flex gap-2 mb-2">
-                  {['Home', 'Work', 'Other'].map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => setLabel(tag)}
-                      className={`px-3 py-1 text-xs font-bold rounded-full border ${
-                        label === tag
-                          ? 'bg-black text-white border-black'
-                          : 'bg-gray-50 text-gray-700 border-gray-300'
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-
+            {step === 'auth' && (
+              <form onSubmit={handleAuthSubmit} className="mt-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Recipient Mobile Number</label>
+                  <label className="block text-xs text-neutral-400 mb-1">Email Address</label>
                   <input
-                    type="tel"
+                    type="email"
                     required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="10-digit mobile number"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-sm focus:outline-none focus:border-amber-500"
+                    placeholder="you@example.com"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">PIN Code (Autofills City & State)</label>
+                  <label className="block text-xs text-neutral-400 mb-1">Password</label>
                   <input
-                    type="text"
-                    maxLength={6}
+                    type="password"
                     required
-                    value={pincode}
-                    onChange={handlePincodeChange}
-                    placeholder="e.g. 110001"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  />
-                  {loadingPincode && <p className="text-xs text-gray-500 mt-1">Fetching region details...</p>}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Flat / Building / House No.</label>
-                  <input
-                    type="text"
-                    required
-                    value={line1}
-                    onChange={(e) => setLine1(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-sm focus:outline-none focus:border-amber-500"
+                    placeholder="Enter password"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Street / Area / Landmark (Optional)</label>
-                  <input
-                    type="text"
-                    value={line2}
-                    onChange={(e) => setLine2(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
-                    <input
-                      type="text"
-                      required
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="w-full px-3 py-2 border bg-gray-50 rounded-lg text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">State</label>
-                    <input
-                      type="text"
-                      required
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      className="w-full px-3 py-2 border bg-gray-50 rounded-lg text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="submit"
-                    disabled={savingAddress}
-                    className="flex-1 bg-black text-white py-2.5 rounded-lg text-xs font-bold uppercase"
-                  >
-                    {savingAddress ? 'Saving...' : 'Save & Select Address'}
-                  </button>
-                  {addresses.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddForm(false)}
-                      className="px-4 py-2.5 border rounded-lg text-xs font-bold text-gray-600"
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full py-3 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition disabled:opacity-50"
+                >
+                  {loading ? 'Authenticating...' : 'Login & Continue'}
+                </button>
               </form>
             )}
+
+            {user && step !== 'auth' && (
+              <p className="mt-2 text-sm text-neutral-400">Logged in as: {user.email}</p>
+            )}
+          </div>
+
+          {/* STEP 2: SHIPPING ADDRESS */}
+          <div className={`p-6 rounded-xl border ${step === 'address' ? 'border-amber-500 bg-neutral-900' : 'border-neutral-800 bg-neutral-900/50'}`}>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <span className="w-7 h-7 rounded-full bg-amber-500 text-black flex items-center justify-center text-sm font-bold">2</span>
+                Shipping Address
+              </h2>
+              {step === 'payment' && (
+                <button onClick={() => setStep('address')} className="text-xs text-amber-500 underline">Change</button>
+              )}
+            </div>
+
+            {step === 'address' && (
+              <div className="mt-4 space-y-4">
+                {!showNewAddressForm && addresses.length > 0 && (
+                  <div className="space-y-3">
+                    {addresses.map((addr) => (
+                      <label
+                        key={addr.id}
+                        className={`block p-4 rounded-lg border cursor-pointer transition ${
+                          selectedAddressId === addr.id ? 'border-amber-500 bg-amber-500/10' : 'border-neutral-800 bg-neutral-800/40'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="address"
+                            checked={selectedAddressId === addr.id}
+                            onChange={() => setSelectedAddressId(addr.id)}
+                            className="mt-1 accent-amber-500"
+                          />
+                          <div>
+                            <p className="font-semibold text-sm">{addr.fullName} ({addr.phone})</p>
+                            <p className="text-xs text-neutral-400">
+                              {addr.line1}{addr.line2 ? `, ${addr.line2}` : ''}, {addr.city}, {addr.state} - {addr.pincode}
+                            </p>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                    <button
+                      onClick={() => setShowNewAddressForm(true)}
+                      className="text-xs text-amber-500 font-semibold hover:underline"
+                    >
+                      + Add New Address
+                    </button>
+                  </div>
+                )}
+
+                {showNewAddressForm && (
+                  <form onSubmit={handleSaveAddress} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-neutral-400 mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          required
+                          value={newAddress.fullName}
+                          onChange={(e) => setNewAddress({ ...newAddress, fullName: e.target.value })}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-neutral-400 mb-1">Phone</label>
+                        <input
+                          type="text"
+                          required
+                          value={newAddress.phone}
+                          onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Address Line 1</label>
+                      <input
+                        type="text"
+                        required
+                        value={newAddress.line1}
+                        onChange={(e) => setNewAddress({ ...newAddress, line1: e.target.value })}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-400 mb-1">Address Line 2 (Optional)</label>
+                      <input
+                        type="text"
+                        value={newAddress.line2 || ''}
+                        onChange={(e) => setNewAddress({ ...newAddress, line2: e.target.value })}
+                        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-neutral-400 mb-1">City</label>
+                        <input
+                          type="text"
+                          required
+                          value={newAddress.city}
+                          onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-neutral-400 mb-1">State</label>
+                        <input
+                          type="text"
+                          required
+                          value={newAddress.state}
+                          onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-neutral-400 mb-1">Pincode</label>
+                        <input
+                          type="text"
+                          required
+                          value={newAddress.pincode}
+                          onChange={(e) => setNewAddress({ ...newAddress, pincode: e.target.value })}
+                          className="w-full bg-neutral-800 border border-neutral-700 rounded-lg p-2.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" className="flex-1 py-2.5 bg-amber-500 text-black text-sm font-semibold rounded-lg">
+                        Save Address
+                      </button>
+                      {addresses.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewAddressForm(false)}
+                          className="px-4 py-2.5 bg-neutral-800 text-neutral-400 text-sm rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                )}
+
+                {!showNewAddressForm && selectedAddressId && (
+                  <button
+                    onClick={() => setStep('payment')}
+                    className="w-full mt-4 py-3 bg-amber-500 text-black font-semibold rounded-lg hover:bg-amber-400 transition"
+                  >
+                    Proceed to Payment
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* STEP 3: PAYMENT */}
+          <div className={`p-6 rounded-xl border ${step === 'payment' ? 'border-amber-500 bg-neutral-900' : 'border-neutral-800 bg-neutral-900/50'}`}>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-amber-500 text-black flex items-center justify-center text-sm font-bold">3</span>
+              Payment Method
+            </h2>
+
+            {step === 'payment' && (
+              <div className="mt-4 space-y-4">
+                <div className="p-4 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 text-sm">
+                  ⚡ <strong>Mock Payment Mode:</strong> Order will be recorded instantly on your database.
+                </div>
+                <button
+                  onClick={handlePlaceOrder}
+                  disabled={submittingOrder}
+                  className="w-full py-4 bg-amber-500 text-black font-bold text-lg rounded-xl hover:bg-amber-400 shadow-lg shadow-amber-500/20 transition disabled:opacity-50"
+                >
+                  {submittingOrder ? 'Processing Order...' : `Pay ₹${grandTotal} & Place Order`}
+                </button>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Order Summary */}
+        <div className="bg-neutral-900 p-6 rounded-xl border border-neutral-800 h-fit space-y-4">
+          <h3 className="font-bold text-lg pb-3 border-b border-neutral-800">Order Summary</h3>
+          <div className="space-y-3 max-h-60 overflow-y-auto">
+            {cartItems.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center text-sm">
+                <div>
+                  <p className="font-medium text-white">Custom T-Shirt ({item.size || 'M'})</p>
+                  <p className="text-xs text-neutral-500">Qty: {item.quantity} | Color: {item.fabricColor || 'Standard'}</p>
+                </div>
+                <p className="font-semibold text-neutral-300">₹{item.price * item.quantity}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-4 border-t border-neutral-800 space-y-2 text-sm">
+            <div className="flex justify-between text-neutral-400">
+              <span>Subtotal</span>
+              <span>₹{subtotal}</span>
+            </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>Shipping</span>
+              <span>₹{shipping}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-neutral-800">
+              <span>Total Amount</span>
+              <span className="text-amber-500">₹{grandTotal}</span>
+            </div>
           </div>
         </div>
 
-        {/* Order Summary Sidebar */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 h-fit space-y-4">
-          <h2 className="font-bold text-lg border-b pb-3">Order Summary</h2>
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Customer</span>
-            <span className="font-semibold text-black">{user?.first_name} {user?.last_name}</span>
-          </div>
-          <button
-            disabled={!selectedAddressId}
-            onClick={() => alert(`Proceeding to payment with Address ID: ${selectedAddressId}`)}
-            className="w-full bg-black text-white py-3 rounded-xl font-bold text-xs uppercase tracking-wider disabled:opacity-50"
-          >
-            Proceed to Payment
-          </button>
-        </div>
       </div>
     </div>
   );
