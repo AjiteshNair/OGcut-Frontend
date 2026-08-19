@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CartProvider } from "../components/CartContext";
+import Navbar from "../components/Navbar";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -30,6 +31,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-[#f5f0e8] text-black">
         <CartProvider>
+          <Navbar />
           {children}
         </CartProvider>
       </body>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, Loader2, Plus, Minus, ArrowDown, LogOut } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 interface Product {
   id: string;
@@ -39,7 +40,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('http://localhost:3001/products');
+        const response = await fetch('http://localhost:3001/api/products');
         if (!response.ok) throw new Error('Failed to fetch products');
         const data = await response.json();
         setProducts(data);
@@ -53,9 +54,30 @@ export default function HomePage() {
     fetchProducts();
   }, []);
 
+  const syncCartToStorage = (updatedQuantities: Record<string, number>) => {
+    // Save items array to localStorage under cart_items
+    const items = Object.entries(updatedQuantities).map(([id, quantity]) => ({ id, quantity }));
+    localStorage.setItem('cart_items', JSON.stringify(items));
+    
+    // Dispatch event so Navbar updates immediately
+    window.dispatchEvent(new Event('cart-updated'));
+  };
+  // const handleAddToCart = (id: string, e: React.MouseEvent) => {
+  //   e.stopPropagation();
+  //   setCartQuantities((prev) => ({ ...prev, [id]: 1 }));
+  // };
   const handleAddToCart = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCartQuantities((prev) => ({ ...prev, [id]: 1 }));
+    setCartQuantities((prev) => {
+      const updated = { ...prev, [id]: 1 };
+      
+      // Convert object to array format for Navbar
+      const items = Object.entries(updated).map(([productId, quantity]) => ({ id: productId, quantity }));
+      localStorage.setItem('cart_items', JSON.stringify(items));
+      window.dispatchEvent(new Event('cart-updated'));
+      
+      return updated;
+    });
   };
 
   const handleIncrement = (id: string, e: React.MouseEvent) => {
@@ -81,42 +103,8 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900 relative">
       {/* Dynamic Dark Navbar (Slides down only on scroll) */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md text-white border-b border-gray-800 transition-all duration-300 ease-in-out ${
-          scrolled
-            ? 'translate-y-0 opacity-100 pointer-events-auto'
-            : '-translate-y-full opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="font-black tracking-widest text-lg uppercase">
-            OGcut
-          </Link>
-          
-          <div className="flex items-center gap-5">
-            <button className="relative p-2 hover:text-gray-300 transition-colors">
-              <ShoppingBag className="w-5 h-5" />
-              {totalCartCount > 0 && (
-                <span className="absolute top-1 right-1 bg-white text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                  {totalCartCount}
-                </span>
-              )}
-            </button>
-
-            {/* User Profile Badge */}
-            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-full px-2.5 py-1">
-              <div className="w-6 h-6 rounded-full bg-white text-black font-bold text-xs flex items-center justify-center">
-                AA
-              </div>
-              <span className="text-xs font-semibold pr-1">as</span>
-            </div>
-
-            <button className="p-2 text-gray-400 hover:text-white transition-colors" title="Logout">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </nav>
+      {/* 1. Shared Navbar (Handles scroll reveal automatically on homepage) */}
+      <Navbar cartCount={totalCartCount} />
 
       {/* Fullscreen Hero Cover (Hits the top edge on land) */}
       <section

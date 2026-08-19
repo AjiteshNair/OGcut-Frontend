@@ -23,7 +23,7 @@ interface UserProfile {
 }
 
 interface OrderItemPayload {
-  productId?: number;
+  productId?: string;
   designId?: string;
   customShirtOrder?: {
     fabricColor: string;
@@ -43,7 +43,8 @@ interface OrderItemPayload {
   };
   quantity: number;
   size?: string;
-  price: number;
+  unitPrice?: number;
+  price?: number;
   fabricColor?: string;
 }
 
@@ -78,21 +79,38 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
-  // Calculate Order Total
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  // Helper to safely extract price regardless of key name
+  const getItemPrice = (item: OrderItemPayload): number => {
+    const val = item.unitPrice ?? item.price ?? 0;
+    return Number(val) || 0;
+  };
+
+  // Calculate Order Total safely
+  const subtotal = cartItems.reduce((acc, item) => {
+    const qty = Number(item.quantity) || 1;
+    return acc + getItemPrice(item) * qty;
+  }, 0);
+
   const shipping = subtotal > 0 ? 50 : 0;
   const grandTotal = subtotal + shipping;
 
-  // Load Cart & User Session
+  // Load Cart & User Session (Handles both 'cart' and 'cart_items')
   useEffect(() => {
-    const storedCart = localStorage.getItem('cart_items');
-    if (storedCart) {
+    const rawCartItems = localStorage.getItem('cart_items');
+    
+    let parsedCart: OrderItemPayload[] = [];
+
+    if (rawCartItems) {
       try {
-        setCartItems(JSON.parse(storedCart));
+        parsedCart = JSON.parse(rawCartItems);
       } catch (e) {
-        console.error('Failed to parse cart items', e);
+        console.error('Failed to parse cart_items', e);
       }
     }
+      console.log("======================================================================================")
+      console.log("Placing order with payload:", parsedCart);
+      console.log("======================================================================================")
+    setCartItems(parsedCart);
 
     const token = localStorage.getItem('token');
     if (token) {
@@ -103,7 +121,6 @@ export default function CheckoutPage() {
   const fetchUserAndAddresses = async (token: string) => {
     setLoading(true);
     try {
-      // 1. Fetch Addresses
       const addrRes = await fetch(`${API_BASE_URL}/addresses`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -201,31 +218,65 @@ export default function CheckoutPage() {
 
     setSubmittingOrder(true);
     try {
-      const formattedItems = cartItems.map((item) => ({
-        productId: item.productId ?? null,
-        designId: item.designId ?? null,
-        customShirtOrder: item.customShirtOrder ?? null,
-        quantity: item.quantity,
-        size: item.size ?? 'M',
-        unitPrice: item.price,
+      alert('called')
+      const formattedItems = cartItems.map((item: any) => {
+      // Check if custom shirt data exists (either nested or at item root)
+      const hasCustomShirt = item.customShirtOrder || (item.placements && item.placements.length > 0);
+
+      const rawPlacements = item.customShirtOrder?.placements || item.placements || [];
+
+      const formattedPlacements = rawPlacements.map((p: any) => ({
+        zone: p.zone || 'front',
+        imageUrl: p.imageUrl || p.image, // Fixes image vs imageUrl naming
+        
+        // Extract coordinates (supports nested object or flat properties)
+        x: Number(p.coordinates?.x ?? p.x ?? 0),
+        y: Number(p.coordinates?.y ?? p.y ?? 0),
+        scale: Number(p.coordinates?.scale ?? p.scale ?? 1),
+        width: Number(p.coordinates?.width ?? p.width ?? 400),
+        height: Number(p.coordinates?.height ?? p.height ?? 400),
+        
+        // Extract print zone bounds (supports nested object or flat properties)
+        centerX: Number(p.printZoneBounds?.centerX ?? p.centerX ?? 1024),
+        centerY: Number(p.printZoneBounds?.centerY ?? p.centerY ?? 1024),
+        clipWidth: Number(p.printZoneBounds?.clipWidth ?? p.clipWidth ?? 800),
+        clipHeight: Number(p.printZoneBounds?.clipHeight ?? p.clipHeight ?? 1000),
       }));
 
-      const res = await fetch(`${API_BASE_URL}/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          addressId: selectedAddressId,
-          items: formattedItems,
-        }),
-      });
+      return {
+        productId: item.productId ?? null,
+        designId: item.designId ?? null,
+        customShirtOrder: hasCustomShirt
+          ? {
+              fabricColor: item.customShirtOrder?.fabricColor || item.fabricColor || '#ffffff',
+              placements: formattedPlacements,
+            }
+          : null,
+        quantity: Number(item.quantity) || 1,
+        size: item.size ?? 'M',
+        unitPrice: getItemPrice(item),
+      };
+    });
+
+    const res = await fetch(`${API_BASE_URL}/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        addressId: selectedAddressId,
+        items: formattedItems,
+      }),
+    });
 
       if (res.ok) {
         const order = await res.json();
+        // Clear both keys from storage
         localStorage.removeItem('cart');
-        router.push(`/order-success?orderId=${order.id}`);
+        localStorage.removeItem('cart_items');
+        // Redirect with ?id= to align with the order success page route reader
+        router.push(`/order-success?id=${order.id}`);
       } else {
         const err = await res.json();
         alert(`Order placement failed: ${err.message || 'Error occurred'}`);
@@ -477,15 +528,19 @@ export default function CheckoutPage() {
         <div className="bg-neutral-900 p-6 rounded-xl border border-neutral-800 h-fit space-y-4">
           <h3 className="font-bold text-lg pb-3 border-b border-neutral-800">Order Summary</h3>
           <div className="space-y-3 max-h-60 overflow-y-auto">
-            {cartItems.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center text-sm">
-                <div>
-                  <p className="font-medium text-white">Custom T-Shirt ({item.size || 'M'})</p>
-                  <p className="text-xs text-neutral-500">Qty: {item.quantity} | Color: {item.fabricColor || 'Standard'}</p>
+            {cartItems.map((item, idx) => {
+              const price = getItemPrice(item);
+              const qty = Number(item.quantity) || 1;
+              return (
+                <div key={idx} className="flex justify-between items-center text-sm">
+                  <div>
+                    <p className="font-medium text-white">Custom T-Shirt ({item.size || 'M'})</p>
+                    <p className="text-xs text-neutral-500">Qty: {qty} | Color: {item.fabricColor || 'Standard'}</p>
+                  </div>
+                  <p className="font-semibold text-neutral-300">₹{price * qty}</p>
                 </div>
-                <p className="font-semibold text-neutral-300">₹{item.price * item.quantity}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="pt-4 border-t border-neutral-800 space-y-2 text-sm">

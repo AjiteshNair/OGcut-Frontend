@@ -32,7 +32,7 @@ export default function ProductDetailPage() {
 
     const fetchProduct = async () => {
       try {
-        const response = await fetch(`http://localhost:3001/products/${productId}`);
+        const response = await fetch(`http://localhost:3001/api/products/${productId}`);
         if (!response.ok) {
           throw new Error('Product not found');
         }

@@ -1,4 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import AdminShirtInspector3D from '@/components/admin/Admin3DTshirtModel';
 
 type OrderStatus =
   | 'PENDING'
@@ -80,15 +83,15 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
   const [activeItemIndex, setActiveItemIndex] = useState<number>(0);
   const [activeZone, setActiveZone] = useState<string>('front');
   const [updating, setUpdating] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:3001/api/admin/orders/${orderId}`)
+    const token = localStorage.getItem('token');
+    fetch(`http://localhost:3001/orders/admin/${orderId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => res.json())
       .then((data: Order) => {
         setOrder(data);
-
-        // Find initial custom item placements if present
         const firstCustom = data.items?.find((item) => item.customShirtOrder);
         if (firstCustom?.customShirtOrder?.placements?.[0]) {
           setActiveZone(firstCustom.customShirtOrder.placements[0].zone);
@@ -100,67 +103,17 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
   const customShirt = currentItem?.customShirtOrder;
   const currentPlacement = customShirt?.placements?.find((p) => p.zone === activeZone);
 
-  // Reconstruct 2D canvas print preview for custom items
-  useEffect(() => {
-    if (!canvasRef.current || !customShirt) return;
-
-    const placement = customShirt.placements?.find((p) => p.zone === activeZone);
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Render Fabric Background
-    ctx.fillStyle = customShirt.fabricColor || '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (!placement) return;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = placement.imageUrl;
-
-    img.onload = () => {
-      ctx.save();
-
-      // Render Print Boundary Box
-      if (placement.clipWidth > 0 && placement.clipHeight > 0) {
-        const clipX = placement.centerX - placement.clipWidth / 2;
-        const clipY = placement.centerY - placement.clipHeight / 2;
-
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
-        ctx.setLineDash([6, 6]);
-        ctx.strokeRect(clipX, clipY, placement.clipWidth, placement.clipHeight);
-
-        ctx.beginPath();
-        ctx.rect(clipX, clipY, placement.clipWidth, placement.clipHeight);
-        ctx.clip();
-      }
-
-      // Matrix Transformations
-      ctx.translate(placement.x, placement.y);
-      ctx.scale(placement.scale, placement.scale);
-
-      ctx.drawImage(
-        img,
-        -placement.width / 2,
-        -placement.height / 2,
-        placement.width,
-        placement.height
-      );
-
-      ctx.restore();
-    };
-  }, [customShirt, activeZone]);
-
   const handleStatusChange = async (newStatus: OrderStatus) => {
     if (!order) return;
     setUpdating(true);
+    const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:3001/api/admin/orders/${order.id}/status`, {
+      const res = await fetch(`http://localhost:3001/orders/admin/${order.id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
@@ -180,10 +133,8 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '24px', padding: '24px', background: '#121212', color: '#fff', fontFamily: 'sans-serif' }}>
       
-      {/* Left Column: Visual Print Inspector & Items Selector */}
+      {/* Left Column */}
       <div style={{ background: '#1e1e1e', borderRadius: '12px', padding: '20px' }}>
-        
-        {/* Item Navigation Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: '18px' }}>
@@ -191,7 +142,6 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
             </h2>
           </div>
 
-          {/* Zones Switcher (if Custom Item) */}
           {customShirt && (
             <div>
               {customShirt.placements.map((p) => (
@@ -216,7 +166,6 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
           )}
         </div>
 
-        {/* Item Selector Tabs */}
         {order.items.length > 1 && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
             {order.items.map((item, idx) => (
@@ -244,14 +193,28 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
           </div>
         )}
 
-        {/* Canvas or Standard Product Placeholder */}
         <div style={{ textAlign: 'center' }}>
           {customShirt ? (
-            <canvas
-              ref={canvasRef}
-              width={500}
-              height={600}
-              style={{ border: '2px solid #333', borderRadius: '8px', maxWidth: '100%', height: 'auto' }}
+            <AdminShirtInspector3D
+              fabricColor={customShirt.fabricColor || '#ffffff'}
+              placements={customShirt.placements.map((p) => ({
+                zone: p.zone as any,
+                image: p.imageUrl,
+                coordinates: {
+                  x: p.x,
+                  y: p.y,
+                  scale: p.scale,
+                  width: p.width,
+                  height: p.height,
+                },
+                printZoneBounds: {
+                  centerX: p.centerX,
+                  centerY: p.centerY,
+                  clipWidth: p.clipWidth,
+                  clipHeight: p.clipHeight,
+                },
+              }))}
+              heightClass="h-[500px]"
             />
           ) : (
             <div style={{ padding: '60px', background: '#2a2a2a', borderRadius: '8px', color: '#aaa' }}>
@@ -261,10 +224,8 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
         </div>
       </div>
 
-      {/* Right Column: Customer Details & Status Control */}
+      {/* Right Column */}
       <div style={{ background: '#1e1e1e', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* Status Selector */}
         <div>
           <label style={{ fontSize: '12px', textTransform: 'uppercase', color: '#aaa', fontWeight: 'bold' }}>Order Status</label>
           <select
@@ -291,7 +252,6 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
           </select>
         </div>
 
-        {/* Customer & Delivery Summary */}
         <div style={{ background: '#252525', padding: '14px', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6' }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>Customer Information</h4>
           <p style={{ margin: '0 0 4px 0' }}><strong>Name:</strong> {customerName}</p>
@@ -300,7 +260,6 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
           <p style={{ margin: 0 }}><strong>Placed On:</strong> {new Date(order.createdAt).toLocaleString()}</p>
         </div>
 
-        {/* Shipping Address */}
         {order.address && (
           <div style={{ background: '#252525', padding: '14px', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6' }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>Shipping Address</h4>
@@ -311,7 +270,6 @@ export const AdminOrderInspector: React.FC<{ orderId: string }> = ({ orderId }) 
           </div>
         )}
 
-        {/* Selected Placement Details & Download Button */}
         {currentPlacement && (
           <div style={{ background: '#252525', padding: '14px', borderRadius: '8px', fontSize: '13px', lineHeight: '1.6' }}>
             <h4 style={{ margin: '0 0 10px 0', color: '#60a5fa' }}>Print Coordinates ({currentPlacement.zone})</h4>
