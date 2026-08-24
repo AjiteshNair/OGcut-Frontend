@@ -140,9 +140,9 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
         {/* Desktop Navigation Links */}
         <div className="hidden md:flex items-center gap-6 text-xs font-semibold uppercase tracking-wider text-neutral-400">
           <Link
-            href="/customize"
+            href="/edit"
             className={`flex items-center gap-1.5 hover:text-white transition-colors ${
-              pathname === '/customize' ? 'text-amber-500' : ''
+              pathname === '/edit' ? 'text-amber-500' : ''
             }`}
           >
             <Shirt className="w-4 h-4" />
@@ -216,9 +216,9 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
         <div className="md:hidden bg-neutral-950 border-b border-neutral-800 px-6 py-5 space-y-4 animate-in slide-in-from-top-2 duration-200">
           <div className="flex flex-col gap-3 text-sm font-semibold uppercase tracking-wider text-neutral-300">
             <Link
-              href="/customize"
+              href="/edit"
               className={`flex items-center gap-2 py-2 border-b border-neutral-800/50 ${
-                pathname === '/customize' ? 'text-amber-500' : ''
+                pathname === '/edit' ? 'text-amber-500' : ''
               }`}
             >
               <Shirt className="w-4 h-4" />

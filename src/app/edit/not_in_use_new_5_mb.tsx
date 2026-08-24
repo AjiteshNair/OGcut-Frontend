@@ -37,7 +37,7 @@ const PRESET_COLORS = [
 
 // --- 3D T-SHIRT MODEL ---
 function Tshirt({ mergedTexture }: { mergedTexture: THREE.CanvasTexture | null }) {
-  const gltf = useGLTF('/shirt_1-optimized.glb');
+  const gltf = useGLTF('./models/shirt_1-optimized.glb');
   // const gltf = useGLTF('/oversized_t-shirt.glb');
   const groupRef = useRef<THREE.Group>(null);
 

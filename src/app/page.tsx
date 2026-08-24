@@ -2,20 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ShoppingBag, Loader2, Plus, Minus, ArrowDown, LogOut } from 'lucide-react';
+import { ShoppingBag, Loader2, Plus, Minus, ArrowDown } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-
-interface Product {
-  id: string;
-  name: string;
-  base_price: number;
-  category?: string;
-  tagline?: string;
-  design_type?: string;
-  graphic_url?: string;
-  mockup_url?: string;
-  target_zone?: string;
-}
+import { Product, StandardCartItem } from '@/types/customization';
+import {
+  getStoredCart,
+  updateStandardItemQuantity,
+} from '@/utils/cartStorage';
 
 const HERO_BG_IMAGE =
   'https://imgs.search.brave.com/PSnWaXLyixQaLtlbWLQzjBHMMpSSZQE3L1yd30GZfec/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9zdGF0/aWMudmVjdGVlenku/Y29tL3N5c3RlbS9y/ZXNvdXJjZXMvdGh1/bWJuYWlscy8wNjcv/NjQ4Lzg1MC9zbWFs/bC9jbG9zZXVwLWRh/cmstZmFicmljLXRl/eHR1cmUtaW50ZXJ0/d2luZWQtdGhyZWFk/cy1kZXRhaWxlZC13/b3Zlbi1wYXR0ZXJu/LWJsYWNrLXRleHRp/bGUtYmFja2dyb3Vu/ZC1waG90by5qcGc';
@@ -25,18 +18,34 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
-  const [scrolled, setScrolled] = useState(false);
+
+  // 1. Sync cart quantities on mount and whenever storage/cart updates
+  const syncQuantitiesFromStorage = () => {
+    const cart = getStoredCart();
+    const quantities: Record<string, number> = {};
+
+    cart.forEach((item) => {
+      if (item.type === 'standard') {
+        quantities[item.productId] = (quantities[item.productId] || 0) + item.quantity;
+      }
+    });
+
+    setCartQuantities(quantities);
+  };
 
   useEffect(() => {
-    const handleScroll = () => {
-      // Reveal dark navbar after 60px of scrolling
-      setScrolled(window.scrollY > 60);
-    };
+    syncQuantitiesFromStorage();
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('storage', syncQuantitiesFromStorage);
+    window.addEventListener('cart-updated', syncQuantitiesFromStorage);
+
+    return () => {
+      window.removeEventListener('storage', syncQuantitiesFromStorage);
+      window.removeEventListener('cart-updated', syncQuantitiesFromStorage);
+    };
   }, []);
 
+  // 2. Fetch products backend API
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -54,59 +63,19 @@ export default function HomePage() {
     fetchProducts();
   }, []);
 
-  const syncCartToStorage = (updatedQuantities: Record<string, number>) => {
-    // Save items array to localStorage under cart_items
-    const items = Object.entries(updatedQuantities).map(([id, quantity]) => ({ id, quantity }));
-    localStorage.setItem('cart_items', JSON.stringify(items));
-    
-    // Dispatch event so Navbar updates immediately
-    window.dispatchEvent(new Event('cart-updated'));
-  };
-  // const handleAddToCart = (id: string, e: React.MouseEvent) => {
-  //   e.stopPropagation();
-  //   setCartQuantities((prev) => ({ ...prev, [id]: 1 }));
-  // };
-  const handleAddToCart = (id: string, e: React.MouseEvent) => {
+  // 3. Cart action handlers using our cartStorage helper
+  const handleQuantityChange = (product: Product, delta: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCartQuantities((prev) => {
-      const updated = { ...prev, [id]: 1 };
-      
-      // Convert object to array format for Navbar
-      const items = Object.entries(updated).map(([productId, quantity]) => ({ id: productId, quantity }));
-      localStorage.setItem('cart_items', JSON.stringify(items));
-      window.dispatchEvent(new Event('cart-updated'));
-      
-      return updated;
-    });
-  };
-
-  const handleIncrement = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCartQuantities((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  };
-
-  const handleDecrement = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCartQuantities((prev) => {
-      const currentQty = prev[id] || 0;
-      if (currentQty <= 1) {
-        const updated = { ...prev };
-        delete updated[id];
-        return updated;
-      }
-      return { ...prev, [id]: currentQty - 1 };
-    });
+    updateStandardItemQuantity(product, delta);
   };
 
   const totalCartCount = Object.values(cartQuantities).reduce((a, b) => a + b, 0);
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900 relative">
-      {/* Dynamic Dark Navbar (Slides down only on scroll) */}
-      {/* 1. Shared Navbar (Handles scroll reveal automatically on homepage) */}
       <Navbar cartCount={totalCartCount} />
 
-      {/* Fullscreen Hero Cover (Hits the top edge on land) */}
+      {/* Hero Cover */}
       <section
         className="relative w-full h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center text-center px-6"
         style={{ backgroundImage: `url(${HERO_BG_IMAGE})` }}
@@ -130,18 +99,15 @@ export default function HomePage() {
           <ArrowDown className="w-4 h-4" />
         </div>
       </section>
-      
-      {/* Customize Your Own Section */}
+
+      {/* Customization Banner */}
       <section className="max-w-6xl mx-auto my-12 px-4">
         <div className="relative overflow-hidden rounded-3xl bg-black text-white border border-gray-800 p-8 md:p-12 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 group">
-          
-          {/* Subtle texture overlay */}
-          <div 
+          <div
             className="absolute inset-0 opacity-20 pointer-events-none bg-cover bg-center"
             style={{ backgroundImage: `url(${HERO_BG_IMAGE})` }}
           />
 
-          {/* Content */}
           <div className="relative z-10 max-w-xl space-y-3 text-center md:text-left">
             <span className="text-xs font-bold uppercase tracking-widest text-gray-400 bg-gray-900 border border-gray-800 px-3 py-1 rounded-full inline-block">
               Custom Lab
@@ -154,7 +120,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Redirect CTA Button */}
           <div className="relative z-10">
             <Link
               href="/edit"
@@ -167,7 +132,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Product Grid */}
+      {/* Product Catalog */}
       <section id="catalog" className="max-w-6xl mx-auto py-16 px-4">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -250,7 +215,7 @@ export default function HomePage() {
                       <div>
                         {qty === 0 ? (
                           <button
-                            onClick={(e) => handleAddToCart(product.id, e)}
+                            onClick={(e) => handleQuantityChange(product, 1, e)}
                             className="bg-black hover:bg-gray-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
                           >
                             <ShoppingBag className="w-3.5 h-3.5" />
@@ -259,7 +224,7 @@ export default function HomePage() {
                         ) : (
                           <div className="flex items-center bg-gray-100 rounded-xl border border-gray-300 p-1">
                             <button
-                              onClick={(e) => handleDecrement(product.id, e)}
+                              onClick={(e) => handleQuantityChange(product, -1, e)}
                               className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-black hover:bg-gray-200 active:scale-95 transition-all shadow-xs"
                               title="Decrease quantity"
                             >
@@ -269,7 +234,7 @@ export default function HomePage() {
                               {qty}
                             </span>
                             <button
-                              onClick={(e) => handleIncrement(product.id, e)}
+                              onClick={(e) => handleQuantityChange(product, 1, e)}
                               className="w-7 h-7 flex items-center justify-center rounded-lg bg-black text-white hover:bg-gray-800 active:scale-95 transition-all shadow-xs"
                               title="Increase quantity"
                             >

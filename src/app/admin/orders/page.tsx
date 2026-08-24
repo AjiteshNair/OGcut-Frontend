@@ -2,17 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminShirtInspector3D from '@/components/admin/Admin3DTshirtModel';
+import { Placement } from '@/types/customization';
 
-export interface Placement {
-  id?: string;
-  zone: string;
-  imageUrl: string;
-  x: number;
-  y: number;
-  scale: number;
-  width: number;
-  height: number;
-}
 
 export interface CustomShirtOrder {
   id?: string;
@@ -297,10 +288,18 @@ function AdminOrderInspector({ order, onClose }: { order: Order; onClose: () => 
                           <p className="text-neutral-400 font-semibold">Custom Placements:</p>
                           <div className="grid grid-cols-2 gap-2">
                             {placements.map((p, pIdx) => (
-                              <div key={p.id || pIdx} className="bg-neutral-900 p-2 rounded border border-neutral-800 text-[11px] space-y-1">
+                              <div 
+                                key={`${p.zone}_${pIdx}`} 
+                                className="bg-neutral-900 p-2 rounded border border-neutral-800 text-[11px] space-y-1"
+                              >
                                 <p className="text-amber-500 font-bold capitalize">{p.zone} Zone</p>
                                 {p.imageUrl && (
-                                  <a href={p.imageUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-400 underline block truncate">
+                                  <a 
+                                    href={p.imageUrl} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="text-xs text-blue-400 underline block truncate"
+                                  >
                                     View Image Asset
                                   </a>
                                 )}

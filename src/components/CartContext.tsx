@@ -53,7 +53,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [cart, isLoaded]);
 
-  const addToCart = (product: { id: string; name: string; base_price: number; mockup_url?: string | null; graphic_url?: string | null }) => {
+  const addToCart = (product: {
+    id: string;
+    name: string;
+    base_price: number;
+    mockup_url?: string | null;
+    graphic_url?: string | null;
+  }) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
@@ -65,9 +71,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         {
           id: product.id,
+          type: 'standard', // <--- Identifies it as a standard catalog item
+          title: product.name, // <--- Preserves the actual catalog item name
           name: product.name,
           price: Number(product.base_price),
           image: product.mockup_url || product.graphic_url || '',
+          thumbnailUrl: product.mockup_url || product.graphic_url || '',
           quantity: 1,
         },
       ];

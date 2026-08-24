@@ -25,6 +25,11 @@ interface UserProfile {
 interface OrderItemPayload {
   productId?: string;
   designId?: string;
+  type?: 'custom' | 'standard';
+  title?: string;
+  name?: string;
+  thumbnailUrl?: string;
+  image?: string;
   customShirtOrder?: {
     fabricColor: string;
     placements: Array<{
@@ -46,6 +51,7 @@ interface OrderItemPayload {
   unitPrice?: number;
   price?: number;
   fabricColor?: string;
+  placements?: any[];
 }
 
 export default function CheckoutPage() {
@@ -107,9 +113,6 @@ export default function CheckoutPage() {
         console.error('Failed to parse cart_items', e);
       }
     }
-      console.log("======================================================================================")
-      console.log("Placing order with payload:", parsedCart);
-      console.log("======================================================================================")
     setCartItems(parsedCart);
 
     const token = localStorage.getItem('token');
@@ -218,35 +221,35 @@ export default function CheckoutPage() {
 
     setSubmittingOrder(true);
     try {
-      alert('called')
       const formattedItems = cartItems.map((item: any) => {
-      // Check if custom shirt data exists (either nested or at item root)
-      const hasCustomShirt = item.customShirtOrder || (item.placements && item.placements.length > 0);
-
+      const isCustom = item.type === 'custom' || Boolean(item.customShirtOrder) || Boolean(item.placements && item.placements.length > 0);
       const rawPlacements = item.customShirtOrder?.placements || item.placements || [];
 
       const formattedPlacements = rawPlacements.map((p: any) => ({
         zone: p.zone || 'front',
-        imageUrl: p.imageUrl || p.image, // Fixes image vs imageUrl naming
-        
-        // Extract coordinates (supports nested object or flat properties)
+        imageUrl: p.imageUrl || p.image,
         x: Number(p.coordinates?.x ?? p.x ?? 0),
         y: Number(p.coordinates?.y ?? p.y ?? 0),
         scale: Number(p.coordinates?.scale ?? p.scale ?? 1),
         width: Number(p.coordinates?.width ?? p.width ?? 400),
         height: Number(p.coordinates?.height ?? p.height ?? 400),
-        
-        // Extract print zone bounds (supports nested object or flat properties)
         centerX: Number(p.printZoneBounds?.centerX ?? p.centerX ?? 1024),
         centerY: Number(p.printZoneBounds?.centerY ?? p.centerY ?? 1024),
         clipWidth: Number(p.printZoneBounds?.clipWidth ?? p.clipWidth ?? 800),
         clipHeight: Number(p.printZoneBounds?.clipHeight ?? p.clipHeight ?? 1000),
       }));
 
+      const itemTitle = isCustom
+        ? 'Custom T-Shirt'
+        : item.title || item.name || 'Catalog Item';
+
       return {
-        productId: item.productId ?? null,
+        productId: item.productId ?? item.id ?? null,
         designId: item.designId ?? null,
-        customShirtOrder: hasCustomShirt
+        type: isCustom ? 'custom' : 'standard',
+        title: itemTitle,
+        name: itemTitle,
+        customShirtOrder: isCustom
           ? {
               fabricColor: item.customShirtOrder?.fabricColor || item.fabricColor || '#ffffff',
               placements: formattedPlacements,
@@ -531,11 +534,18 @@ export default function CheckoutPage() {
             {cartItems.map((item, idx) => {
               const price = getItemPrice(item);
               const qty = Number(item.quantity) || 1;
+              const isCustom = item.type === 'custom' || Boolean(item.customShirtOrder) || Boolean(item.placements?.length);
+              const displayTitle = isCustom
+                ? 'Custom T-Shirt'
+                : item.title || item.name || 'Catalog Item';
+
               return (
                 <div key={idx} className="flex justify-between items-center text-sm">
                   <div>
-                    <p className="font-medium text-white">Custom T-Shirt ({item.size || 'M'})</p>
-                    <p className="text-xs text-neutral-500">Qty: {qty} | Color: {item.fabricColor || 'Standard'}</p>
+                    <p className="font-medium text-white">{displayTitle} ({item.size || 'M'})</p>
+                    <p className="text-xs text-neutral-500">
+                      Qty: {qty} {isCustom ? `| Color: ${item.fabricColor || 'Standard'}` : ''}
+                    </p>
                   </div>
                   <p className="font-semibold text-neutral-300">₹{price * qty}</p>
                 </div>

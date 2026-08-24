@@ -16,10 +16,22 @@ interface OrderAddress {
 
 interface OrderItem {
   id?: string;
+  _id?: string;
+  title?: string;
+  name?: string;
+  type?: 'custom' | 'standard';
   size?: string;
   quantity: number;
   unitPrice?: number | string;
   price?: number | string;
+  fabricColor?: string;
+  thumbnailUrl?: string;
+  image?: string;
+  placements?: Array<{ zone: string }>;
+  customShirtOrder?: {
+    fabricColor?: string;
+    placements?: Array<{ zone: string }>;
+  };
 }
 
 interface OrderDetails {
@@ -29,7 +41,7 @@ interface OrderDetails {
   paymentStatus?: string;
   address?: OrderAddress;
   shippingAddress?: OrderAddress;
-  items?: OrderItem[];
+  items: OrderItem[];
 }
 
 function OrderSuccessContent() {
@@ -137,22 +149,77 @@ function OrderSuccessContent() {
         )}
 
         {/* Items Summary */}
-        {order.items && order.items.length > 0 && (
-          <div className="border-t border-neutral-800 pt-4 space-y-3">
-            {order.items.map((item, idx) => {
-              const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
-              const qty = Number(item.quantity) || 1;
-              return (
-                <div key={idx} className="flex justify-between items-center text-sm">
-                  <span className="text-neutral-300">
-                    Custom T-Shirt ({item.size || 'M'}) x{qty}
-                  </span>
-                  <span className="font-semibold">₹{itemPrice * qty}</span>
-                </div>
-              );
-            })}
+<div className="bg-neutral-800/40 p-4 rounded-xl text-left space-y-3">
+  <p className="text-neutral-400 uppercase font-semibold tracking-wider text-xs border-b border-neutral-800 pb-2">
+    Ordered Items
+  </p>
+
+  {(order.items ?? []).map((item: any, idx: number) => {
+    // Detect custom shirt via explicit type or existence of placement/customShirtOrder data
+    const isCustom =
+      item.type === 'custom' ||
+      Boolean(item.customShirtOrder) ||
+      Boolean(item.placements && item.placements.length > 0);
+
+    // Dynamic Title Selection
+    const title = isCustom
+      ? 'Custom T-Shirt'
+      : item.title || item.name || item.productTitle || item.product?.title || 'Catalog T-Shirt';
+
+    const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
+    const qty = Number(item.quantity) || 1;
+    const fabricColor = item.fabricColor || item.customShirtOrder?.fabricColor;
+    const placements = item.placements || item.customShirtOrder?.placements || [];
+    const imageSrc = item.thumbnailUrl || item.image;
+
+    return (
+      <div
+        key={item.id || item._id || idx}
+        className="flex items-center justify-between py-2 border-b border-neutral-800 last:border-none"
+      >
+        <div className="flex items-center gap-3">
+          {/* Color Badge for Custom Shirts */}
+          {isCustom && fabricColor && (
+            <span
+              className="w-4 h-4 rounded-full border border-neutral-600 inline-block shrink-0"
+              style={{ backgroundColor: fabricColor }}
+              title={`Fabric Color: ${fabricColor}`}
+            />
+          )}
+
+          {/* Image Preview for Catalog Shirts */}
+          {!isCustom && imageSrc && (
+            <img
+              src={imageSrc}
+              alt={title}
+              className="w-10 h-10 object-cover rounded-lg border border-neutral-700 shrink-0"
+            />
+          )}
+
+          <div>
+            <p className="text-sm font-bold text-white">
+              {title}{' '}
+              <span className="text-xs font-normal text-neutral-400">
+                ({item.size || 'M'}) × {qty}
+              </span>
+            </p>
+
+            {/* Print Details Tag for Custom Shirts */}
+            {isCustom && placements.length > 0 && (
+              <p className="text-[11px] text-neutral-400">
+                Prints: {placements.map((p: any) => p.zone).join(', ')}
+              </p>
+            )}
           </div>
-        )}
+        </div>
+
+        <span className="text-sm font-bold text-neutral-200">
+          ₹{itemPrice * qty}
+        </span>
+      </div>
+    );
+  })}
+</div>
 
         <div className="flex justify-between font-bold text-base pt-2 border-t border-neutral-800">
           <span>Total Paid</span>
