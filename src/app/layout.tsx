@@ -32,7 +32,10 @@ export default function RootLayout({
       <body className="min-h-full bg-[#f5f0e8] text-black">
         <CartProvider>
           <Navbar />
-          {children}
+          {/* pt-16 reserves 64px at the top so fixed navbar doesn't cover content */}
+          <main className="pt-16">
+            {children}
+          </main>
         </CartProvider>
       </body>
     </html>

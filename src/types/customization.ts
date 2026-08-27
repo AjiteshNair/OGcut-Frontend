@@ -26,15 +26,17 @@ export interface Placement {
   clipHeight: number;
 }
 export interface Product {
-  id: string;
+  id: number;
   name: string;
-  base_price: number;
+  desc: string;
+  price: number;
+  type: string;
+  isActive: boolean;
+  image: string | null;
+  
+  // Optional / legacy fields
   category?: string;
   tagline?: string;
-  design_type?: string;
-  graphic_url?: string;
-  mockup_url?: string;
-  target_zone?: string;
 }
 
 export interface CustomCartItem {
@@ -56,7 +58,7 @@ export interface CustomCartItem {
 export interface StandardCartItem {
   type: 'standard';
   id: string; // Cart line-item ID (or productId)
-  productId?: string;
+  productId: number;
   title: string;
   name?: string;
   thumbnailUrl?: string;

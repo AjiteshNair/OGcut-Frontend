@@ -20,15 +20,12 @@ interface NavbarProps {
 
 export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState<number>(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const pathname = usePathname();
   const router = useRouter();
-  const isHomePage = pathname === '/';
 
-  // Check User Session
   const checkUser = () => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
@@ -42,8 +39,12 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
     }
   };
 
-  // Calculate Total Quantity of Items in Cart
   const updateCartCount = () => {
+    if (typeof propCartCount === 'number') {
+      setCartCount(propCartCount);
+      return;
+    }
+
     try {
       const rawCart = localStorage.getItem('cart') || localStorage.getItem('cart_items');
       if (rawCart) {
@@ -63,14 +64,16 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
   };
 
   useEffect(() => {
+    if (typeof propCartCount === 'number') {
+      setCartCount(propCartCount);
+    }
+  }, [propCartCount]);
+
+  useEffect(() => {
     checkUser();
     updateCartCount();
 
-    // Listeners for auth & cart storage updates
-    window.addEventListener('storage', () => {
-      checkUser();
-      updateCartCount();
-    });
+    window.addEventListener('storage', checkUser);
     window.addEventListener('user-logged-in', checkUser);
     window.addEventListener('auth-change', checkUser);
     window.addEventListener('cart-updated', updateCartCount);
@@ -83,22 +86,9 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
     };
   }, []);
 
-  // Close mobile menu on page transition
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
-
-  // Handle scroll behavior specifically for Homepage hero
-  useEffect(() => {
-    if (!isHomePage) return;
-
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 60);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [isHomePage]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -108,14 +98,6 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
     router.push('/');
   };
 
-  // Visibility logic: On non-home pages, always visible at top. On homepage, slide down on scroll.
-  const visibilityClass = isHomePage
-    ? scrolled || mobileMenuOpen
-      ? 'translate-y-0 opacity-100 pointer-events-auto'
-      : '-translate-y-full opacity-0 pointer-events-none'
-    : 'translate-y-0 opacity-100 pointer-events-auto';
-
-  // Extract user display name and initials safely
   const firstName = user?.first_name || user?.firstName || '';
   const lastName = user?.last_name || user?.lastName || '';
   const initials =
@@ -125,10 +107,8 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
   const displayName = firstName || user?.email?.split('@')[0] || 'Account';
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md text-white border-b border-gray-800 transition-all duration-300 ease-in-out ${visibilityClass}`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md text-white border-b border-gray-800 h-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
         {/* Brand Logo */}
         <Link
           href="/"
@@ -152,7 +132,6 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
 
         {/* Right Action Bar */}
         <div className="flex items-center gap-3 sm:gap-5">
-          {/* Cart Icon & Counter Badge */}
           <Link
             href="/cart"
             className="relative p-2 text-gray-300 hover:text-white transition-colors flex items-center justify-center"
@@ -160,13 +139,12 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
           >
             <ShoppingBag className="w-5 h-5" />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-amber-500 text-black text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-md animate-scale-in">
+              <span className="absolute -top-0.5 -right-0.5 bg-amber-500 text-black text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-md">
                 {cartCount > 99 ? '99+' : cartCount}
               </span>
             )}
           </Link>
 
-          {/* Desktop User Account Actions */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
@@ -200,7 +178,6 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
             )}
           </div>
 
-          {/* Mobile Hamburger Toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden p-2 text-gray-300 hover:text-white focus:outline-none"
@@ -211,9 +188,8 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
         </div>
       </div>
 
-      {/* Mobile Dropdown Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-neutral-950 border-b border-neutral-800 px-6 py-5 space-y-4 animate-in slide-in-from-top-2 duration-200">
+        <div className="md:hidden bg-neutral-950 border-b border-neutral-800 px-6 py-5 space-y-4">
           <div className="flex flex-col gap-3 text-sm font-semibold uppercase tracking-wider text-neutral-300">
             <Link
               href="/edit"

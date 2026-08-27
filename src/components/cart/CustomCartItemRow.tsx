@@ -62,23 +62,22 @@ function CartItemModel({ item }: { item: CustomCartItem }) {
       return;
     }
 
-    const imagePromises = item.placements.map((placement) => {
-      return new Promise<void>((resolve, reject) => {
-        if (!placement) {
-          return reject(new Error('Invalid placement object provided to CartItemModel.'));
-        }
+    const imagePromises = item.placements.map((placement: any) => {
+      return new Promise<void>((resolve) => {
+        if (!placement) return resolve();
 
-        // Direct destructuring based on strict Placement interface
-        const { width, height, scale, x, y, imageUrl, centerX, centerY, clipWidth, clipHeight, zone } = placement;
+        const imageUrl = placement.imgurl || placement.imageUrl || placement.image;
+        if (!imageUrl) return resolve();
 
-        // Fail fast if critical properties are missing
-        if (width === undefined || height === undefined || !imageUrl) {
-          return reject(
-            new Error(
-              `Malformed placement data for zone "${zone}": width, height, or imageUrl is undefined.`
-            )
-          );
-        }
+        const rawPlace = placement.place || placement.zone || 'front';
+        let zoneKey: Zone = 'front';
+        if (rawPlace === 'front') zoneKey = 'front';
+        else if (rawPlace === 'back') zoneKey = 'back';
+        else if (rawPlace === 'left' || rawPlace === 'leftSleeve') zoneKey = 'leftSleeve';
+        else if (rawPlace === 'right' || rawPlace === 'rightSleeve') zoneKey = 'rightSleeve';
+
+        const zoneConfig = DEFAULT_ZONES[zoneKey] || DEFAULT_ZONES.front;
+        const { x: centerX, y: centerY, clipWidth, clipHeight } = zoneConfig;
 
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -86,39 +85,53 @@ function CartItemModel({ item }: { item: CustomCartItem }) {
 
         img.onload = () => {
           ctx.save();
-          
-          // Clip drawing to zone bounds
+
+          // 1. Clip canvas to zone boundary
           const rx = centerX - clipWidth / 2;
           const ry = centerY - clipHeight / 2;
           ctx.beginPath();
           ctx.rect(rx, ry, clipWidth, clipHeight);
           ctx.clip();
 
-          // Calculate scaled print dimensions
-          const drawW = width * scale;
-          const drawH = height * scale;
-          const drawX = centerX + x - drawW / 2;
-          const drawY = centerY + y - drawH / 2;
+          // 2. Derive base size inside the clip container
+          const aspect = img.width / img.height;
+          
+          // Base fit inside clip area (normalized)
+          let baseW = clipWidth * 0.5;
+          let baseH = baseW / aspect;
 
+          if (baseH > clipHeight * 0.5) {
+            baseH = clipHeight * 0.5;
+            baseW = baseH * aspect;
+          }
+
+          // 3. Apply zoom / scale factor
+          const userZoom = placement.zoom ?? placement.scale ?? 1;
+          const drawW = baseW * userZoom;
+          const drawH = baseH * userZoom;
+
+          // 4. Position offset relative to center
+          const offsetX = placement.xvalue ?? placement.x ?? 0;
+          const offsetY = placement.yvalue ?? placement.y ?? 0;
+
+          const drawX = centerX + offsetX - drawW / 2;
+          const drawY = centerY + offsetY - drawH / 2;
+
+          // 5. Render image onto texture canvas
           ctx.drawImage(img, drawX, drawY, drawW, drawH);
           ctx.restore();
+
           resolve();
         };
 
-        img.onerror = () => {
-          reject(new Error(`Failed to load texture image from source: ${imageUrl}`));
-        };
+        img.onerror = () => resolve();
       });
     });
 
-    Promise.all(imagePromises)
-      .then(() => {
-        tex.needsUpdate = true;
-        setTexture(tex);
-      })
-      .catch((err) => {
-        console.error('3D Model Texture Generation Failed:', err);
-      });
+    Promise.all(imagePromises).then(() => {
+      tex.needsUpdate = true;
+      setTexture(tex);
+    });
 
     return () => {
       tex.dispose();
@@ -140,6 +153,7 @@ function CartItemModel({ item }: { item: CustomCartItem }) {
     </div>
   );
 }
+
 interface CustomCartItemRowProps {
   item: CustomCartItem;
   onQuantityChange: (id: string, delta: number) => void;
@@ -157,9 +171,33 @@ export const CustomCartItemRow: React.FC<CustomCartItemRowProps> = ({
 }) => {
   const router = useRouter();
 
+  // Find the primary uploaded design image URL
+  const primaryPlacement = item.placements && item.placements.length > 0 ? item.placements[0] : null;
+  const designImageUrl = primaryPlacement ? ((primaryPlacement as any).imgurl || (primaryPlacement as any).imageUrl) : null;
+
   return (
     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
-      <CartItemModel item={item} />
+      {/* 3D Model & Flat Image Preview Section */}
+      <div className="flex items-center gap-3 shrink-0">
+        <CartItemModel item={item} />
+
+        {/* Flat Design Image Thumbnail */}
+        {designImageUrl && (
+          <div className="w-20 h-28 rounded-xl border border-slate-200 bg-slate-50 p-2 flex flex-col items-center justify-between overflow-hidden shrink-0">
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              {(primaryPlacement as any)?.place || (primaryPlacement as any)?.zone || 'Design'}
+            </span>
+            <div className="w-full h-16 relative flex items-center justify-center">
+              <img
+                src={designImageUrl}
+                alt="Uploaded Design"
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+            <span className="text-[9px] text-slate-400 font-medium">Original</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex-1 space-y-2 text-center sm:text-left w-full">
         <div className="flex items-center justify-between sm:justify-start gap-2">
@@ -175,7 +213,7 @@ export const CustomCartItemRow: React.FC<CustomCartItemRowProps> = ({
           <p>
             Placements:{' '}
             <span className="font-semibold text-slate-700">
-              {item.placements?.map((p) => p.zone).join(', ') || 'None'}
+              {item.placements?.map((p: any) => p.place || p.zone).join(', ') || 'None'}
             </span>
           </p>
 

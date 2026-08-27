@@ -294,23 +294,14 @@ function TshirtConfiguratorContent() {
       // Concurrently upload base64 image strings to Supabase and retrieve public CDN URLs
       const placementPromises = configuredZones.map(async (zKey) => {
         const imgData = zoneImages[zKey]!;
-        const config = zones[zKey];
-
         const publicImageUrl = await uploadImageToSupabase(imgData.dataUrl, zKey);
 
-        // Return a clean, flattened placement object that matches CartItem specs directly
         return {
-          zone: zKey as string,
-          imageUrl: publicImageUrl,
-          x: imgData.x ?? 0,
-          y: imgData.y ?? 0,
-          scale: imgData.scale ?? 1,
-          width: imgData.customWidth ?? 400,
-          height: imgData.customHeight ?? 400,
-          centerX: config?.x ?? 0,
-          centerY: config?.y ?? 0,
-          clipWidth: config?.clipWidth ?? 0,
-          clipHeight: config?.clipHeight ?? 0,
+          place: zKey.toLowerCase(), // Must be 'front', 'back', 'left', or 'right'
+          imgurl: publicImageUrl,    // Backend expects 'imgurl' (lowercase)
+          xvalue: Number(imgData.x ?? 0),
+          yvalue: Number(imgData.y ?? 0),
+          zoom: Number(imgData.scale ?? 1),
         };
       });
 
@@ -318,12 +309,12 @@ function TshirtConfiguratorContent() {
 
       // Build a fully typed CustomCartItem payload
       const cartItemPayload = {
-        type: 'custom' as const,
+        pid: 1, // Must be a Number (e.g., 1 or product ID)
+        type: 'custom',
         title: 'Custom 3D T-Shirt',
         size: selectedSize,
         fabricColor,
         placements: uploadedPlacements,
-        price: 499,
         quantity: 1,
       };
 

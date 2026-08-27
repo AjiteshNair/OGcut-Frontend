@@ -3,8 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, Loader2, Plus, Minus, ArrowDown } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import { Product, StandardCartItem } from '@/types/customization';
+import { Product } from '@/types/customization';
 import {
   getStoredCart,
   updateStandardItemQuantity,
@@ -45,7 +44,7 @@ export default function HomePage() {
     };
   }, []);
 
-  // 2. Fetch products backend API
+  // 2. Fetch products from backend API
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -63,18 +62,14 @@ export default function HomePage() {
     fetchProducts();
   }, []);
 
-  // 3. Cart action handlers using our cartStorage helper
+  // 3. Cart action handlers using cartStorage helper
   const handleQuantityChange = (product: Product, delta: number, e: React.MouseEvent) => {
     e.stopPropagation();
     updateStandardItemQuantity(product, delta);
   };
 
-  const totalCartCount = Object.values(cartQuantities).reduce((a, b) => a + b, 0);
-
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-900 relative">
-      <Navbar cartCount={totalCartCount} />
-
+    <main className="-mt-16 min-h-screen bg-gray-50 text-gray-900 relative">
       {/* Hero Cover */}
       <section
         className="relative w-full h-screen bg-cover bg-center bg-no-repeat flex items-center justify-center text-center px-6"
@@ -83,7 +78,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-black/60" />
 
         <div className="relative z-10 max-w-3xl mx-auto space-y-5 text-white">
-          <span className="text-xs tracking-widest text-gray-300 font-semibold block">
+          <span className="text-xs tracking-widest text-gray-300 font-semibold block uppercase">
             OGcut / Streetwear Collection
           </span>
           <h1 className="text-5xl md:text-7xl font-black tracking-tight drop-shadow-md">
@@ -160,9 +155,7 @@ export default function HomePage() {
         {!loading && !error && products.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {products.map((product) => {
-              const imageUrl =
-                product.mockup_url || product.graphic_url || 'https://via.placeholder.com/400';
-              const price = product.base_price;
+              const imageUrl = product.image || 'https://placehold.co/600x600/png?text=No+Image';
               const qty = cartQuantities[product.id] || 0;
 
               return (
@@ -183,11 +176,6 @@ export default function HomePage() {
                           'https://placehold.co/600x600/png?text=Image+Not+Found';
                       }}
                     />
-                    {product.category && (
-                      <span className="absolute top-3 left-3 bg-black/80 text-white text-[10px] uppercase font-bold px-2.5 py-1 rounded-full backdrop-blur-sm">
-                        {product.category}
-                      </span>
-                    )}
                   </Link>
 
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
@@ -195,9 +183,9 @@ export default function HomePage() {
                       <h3 className="font-bold text-base text-gray-900 group-hover:text-black line-clamp-1">
                         {product.name}
                       </h3>
-                      {product.tagline && (
+                      {product.desc && (
                         <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                          {product.tagline}
+                          {product.desc}
                         </p>
                       )}
                     </Link>
@@ -208,7 +196,7 @@ export default function HomePage() {
                           Price
                         </span>
                         <span className="text-lg font-black text-black">
-                          ₹{Number(price).toLocaleString('en-IN')}
+                          ₹{Number(product.price).toLocaleString('en-IN')}
                         </span>
                       </div>
 

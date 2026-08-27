@@ -1,8 +1,10 @@
 export interface Address {
   id: string;
+  label: string;
   fullName: string;
   phone: string;
-  street: string;
+  line1: string;
+  line2?: string;
   city: string;
   state: string;
   pincode: string;
@@ -11,29 +13,76 @@ export interface Address {
 
 export interface UserProfile {
   id: string;
-  name: string;
-  phone: string;
-  email?: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface Placement {
+  zone?: string;
+  imageUrl?: string;
+  image?: string;
+  x?: number;
+  y?: number;
+  scale?: number;
+  width?: number;
+  height?: number;
+  centerX?: number;
+  centerY?: number;
+  clipWidth?: number;
+  clipHeight?: number;
+  coordinates?: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    width?: number;
+    height?: number;
+  };
+  printZoneBounds?: {
+    centerX?: number;
+    centerY?: number;
+    clipWidth?: number;
+    clipHeight?: number;
+  };
 }
 
 export interface OrderItemPayload {
-  id: string;
-  size: string;
-  fabricColor: string;
-  price: number;
+  id?: string | number;
+  productId?: string | number;
+  designId?: string;
+  type?: 'custom' | 'standard';
+  title?: string;
+  name?: string;
+  thumbnailUrl?: string;
+  image?: string;
+  customShirtOrder?: {
+    fabricColor: string;
+    placements: Placement[];
+  };
   quantity: number;
-  placements: any; // Canvas texture or zone design payload
+  size?: string;
+  unitPrice?: number;
+  price?: number;
+  fabricColor?: string;
+  placements?: Placement[];
 }
 
-export interface Order {
-  id: string;
-  userId: string;
-  userName: string;
-  userPhone: string;
-  shippingAddress: Address;
-  items: OrderItemPayload[];
-  totalAmount: number;
-  paymentStatus: 'PAID' | 'PENDING' | 'FAILED';
-  orderStatus: 'PROCESSING' | 'SHIPPED' | 'DELIVERED';
-  createdAt: string;
+export interface FormattedOrderItem {
+  productId: number;
+  quantity: number;
+  size: string;
+  unitPrice: number;
+  placements?: Array<{
+    zone: string;
+    imageUrl: string;
+    x: number;
+    y: number;
+    scale: number;
+    width: number;
+    height: number;
+    centerX: number;
+    centerY: number;
+    clipWidth: number;
+    clipHeight: number;
+  }>;
 }

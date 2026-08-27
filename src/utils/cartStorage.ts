@@ -45,8 +45,8 @@ export const updateStandardItemQuantity = (
       id: `std_${product.id}`,
       productId: product.id,
       title: product.name,
-      thumbnailUrl: product.mockup_url || product.graphic_url || '',
-      price: product.base_price,
+      thumbnailUrl: product.image || '',
+      price: product.price,
       quantity: delta,
     };
     currentCart.push(newItem);

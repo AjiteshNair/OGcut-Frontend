@@ -28,7 +28,7 @@ export default function AuthPage() {
     setLoading(true);
     setError('');
 
-    const BACKEND_URL = 'http://localhost:3001';
+    const BACKEND_URL = 'http://localhost:3001/api';
     const endpoint = isLogin
       ? `${BACKEND_URL}/auth/login`
       : `${BACKEND_URL}/auth/register`;

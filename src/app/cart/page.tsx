@@ -45,8 +45,8 @@ export default function CartPage() {
           const normalizedPlacements = (item.placements || []).map((p: any) => ({
             zone: p.zone,
             // Support both flat (imageUrl) and legacy nested/image properties
-            imageUrl: p.imageUrl || p.image || '',
-            image: p.image || p.imageUrl || '',
+            imageUrl: p.imgurl || '',
+            image: p.imgurl || '',
             x: p.coordinates?.x ?? p.x ?? 0,
             y: p.coordinates?.y ?? p.y ?? 0,
             scale: p.coordinates?.scale ?? p.scale ?? 1,
