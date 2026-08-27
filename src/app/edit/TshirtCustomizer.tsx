@@ -451,8 +451,7 @@ function TshirtConfiguratorContent({ onSubmitCustomization }: TshirtConfigurator
       const updatedCartItem = {
         id: newItemId,
         fabricColor: payload.fabricColor,
-        placements: payload.placements,
-        price: 499,
+        placements: payload.placements
       };
 
       if (editId) {

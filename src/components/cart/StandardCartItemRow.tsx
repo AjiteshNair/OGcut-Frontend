@@ -76,7 +76,7 @@ export const StandardCartItemRow: React.FC<StandardCartItemRowProps> = ({
           </div>
 
           <span className="text-xs font-bold text-slate-900">
-            ₹{(item.price || 499) * (item.quantity || 1)}
+            ₹{(item.price) * (item.quantity)}
           </span>
         </div>
 

@@ -28,70 +28,94 @@ export default function CartPage() {
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    try {
-      const savedCart = localStorage.getItem('cart_items');
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart);
-        
-        // Normalize legacy and new placement data formats
-        const normalizedCart = parsed.map((item: any) => {
-          const isCustom = item.type === 'custom' || !!item.placements;
-          
-          if (!isCustom) {
-            return { ...item, type: 'standard' };
-          }
+    const loadAndNormalizeCart = () => {
+      try {
+        const savedCart = localStorage.getItem('cart_items');
+        if (savedCart) {
+          const parsed = JSON.parse(savedCart);
 
-          // Standardize placements so CustomCartItemRow can find image URLs
-          const normalizedPlacements = (item.placements || []).map((p: any) => ({
-            zone: p.zone,
-            // Support both flat (imageUrl) and legacy nested/image properties
-            imageUrl: p.imgurl || '',
-            image: p.imgurl || '',
-            x: p.coordinates?.x ?? p.x ?? 0,
-            y: p.coordinates?.y ?? p.y ?? 0,
-            scale: p.coordinates?.scale ?? p.scale ?? 1,
-            width: p.coordinates?.width ?? p.width ?? 400,
-            height: p.coordinates?.height ?? p.height ?? 400,
-            centerX: p.printZoneBounds?.centerX ?? p.centerX ?? 0,
-            centerY: p.printZoneBounds?.centerY ?? p.centerY ?? 0,
-            clipWidth: p.printZoneBounds?.clipWidth ?? p.clipWidth ?? 0,
-            clipHeight: p.printZoneBounds?.clipHeight ?? p.clipHeight ?? 0,
-          }));
+          // Normalize legacy and new placement data formats
+          const normalizedCart = parsed.map((item: any) => {
+            const isCustom = item.type === 'custom' || !!item.placements;
 
-          return {
-            ...item,
-            type: 'custom',
-            placements: normalizedPlacements,
-          };
-        });
+            if (!isCustom) {
+              return { ...item, type: 'standard' };
+            }
 
-        setCartItems(normalizedCart);
-      }
+            // Standardize placements so CustomCartItemRow can find image URLs & scale properly
+            const normalizedPlacements = (item.placements || []).map((p: any) => ({
+              place: p.place || p.zone || 'front',
+              zone: p.place || p.zone || 'front',
+              
+              // Image URL fallbacks
+              imgurl: p.imgurl || p.imageUrl || p.image || '',
+              imageUrl: p.imgurl || p.imageUrl || p.image || '',
+              image: p.imgurl || p.imageUrl || p.image || '',
+              
+              // Coordinate fallbacks (Support xvalue/yvalue & legacy coordinates object)
+              xvalue: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
+              yvalue: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
+              x: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
+              y: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
 
-      const token = localStorage.getItem('token');
-      if (token) {
-        setIsLoggedIn(true);
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const userObj = JSON.parse(storedUser);
-            setUserEmail(userObj.email);
-          } catch (e) {
-            /* ignore parse error */
+              // Scale / Zoom fallbacks (CRITICAL: added zoom support here)
+              zoom: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
+              scale: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
+
+              // Bounds
+              width: p.width ?? p.coordinates?.width ?? 400,
+              height: p.height ?? p.coordinates?.height ?? 400,
+              centerX: p.centerX ?? p.printZoneBounds?.centerX ?? 0,
+              centerY: p.centerY ?? p.printZoneBounds?.centerY ?? 0,
+              clipWidth: p.clipWidth ?? p.printZoneBounds?.clipWidth ?? 0,
+              clipHeight: p.clipHeight ?? p.printZoneBounds?.clipHeight ?? 0,
+            }));
+
+            return {
+              ...item,
+              type: 'custom',
+              placements: normalizedPlacements,
+            };
+          });
+
+          setCartItems(normalizedCart);
+        } else {
+          setCartItems([]);
+        }
+
+        const token = localStorage.getItem('token');
+        if (token) {
+          setIsLoggedIn(true);
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            try {
+              const userObj = JSON.parse(storedUser);
+              setUserEmail(userObj.email);
+            } catch (e) {
+              /* ignore parse error */
+            }
           }
         }
+      } catch (err) {
+        console.error('Failed to load cart items:', err);
+      } finally {
+        setIsLoaded(true);
       }
-    } catch (err) {
-      console.error('Failed to load cart items:', err);
-    } finally {
-      setIsLoaded(true);
-    }
+    };
+
+    // 1. Initial Load
+    loadAndNormalizeCart();
+
+    // 2. Refresh cart state whenever window regains focus (e.g. returning from /edit)
+    window.addEventListener('focus', loadAndNormalizeCart);
+    return () => window.removeEventListener('focus', loadAndNormalizeCart);
   }, []);
   const saveCartToStorage = (updatedItems: CartItem[]) => {
     setCartItems(updatedItems);
     localStorage.setItem('cart_items', JSON.stringify(updatedItems));
     window.dispatchEvent(new Event('cart-updated'));
   };
+
 
   const handleRemoveItem = (id: string) => {
     saveCartToStorage(cartItems.filter((item) => item.id !== id));
@@ -125,7 +149,7 @@ export default function CartPage() {
   };
 
   const calculateSubtotal = () => {
-    return cartItems.reduce((acc, item) => acc + (item.price || 499) * (item.quantity || 1), 0);
+    return cartItems.reduce((acc, item) => acc + (item.price) * (item.quantity), 0);
   };
 
   const handleLogout = () => {
