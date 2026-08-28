@@ -13,8 +13,10 @@ export default function CheckoutPage() {
   const router = useRouter();
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
-  // State
+  // Step Control
   const [step, setStep] = useState<'auth' | 'address' | 'payment'>('auth');
+  
+  // Data State
   const [cartItems, setCartItems] = useState<OrderItemPayload[]>([]);
   const [user, setUser] = useState<UserProfile | null>(null);
 
@@ -38,20 +40,22 @@ export default function CheckoutPage() {
     isDefault: false,
   });
 
+  // Action States
   const [loading, setLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
-  // Totals
+  // Totals Calculation (Free Shipping)
   const subtotal = cartItems.reduce((acc, item) => {
     const qty = Number(item.quantity) || 1;
     return acc + getItemPrice(item) * qty;
   }, 0);
 
-  const shipping = subtotal > 0 ? 50 : 0;
+  const shipping = 0;
   const grandTotal = subtotal + shipping;
 
-  // Load Session & Cart
-  useEffect(() => {
+  // Sync Cart Items with Backend Canonical Prices
+useEffect(() => {
+  const syncCartWithBackendPrices = async () => {
     const rawCartItems = localStorage.getItem('cart_items');
     let parsedCart: OrderItemPayload[] = [];
 
@@ -62,13 +66,60 @@ export default function CheckoutPage() {
         console.error('Failed to parse cart_items', e);
       }
     }
+
+    if (parsedCart.length === 0) {
+      setCartItems([]);
+      return;
+    }
+
+    // 1. Extract valid numeric product IDs (fallback to 1 if missing or string cart ID)
+    const validProductIds = Array.from(
+      new Set(
+        parsedCart.map((item) => {
+          const parsed = Number(item.productId);
+          return !isNaN(parsed) && parsed > 0 ? parsed : 1;
+        })
+      )
+    ).join(',');
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/products/prices?ids=${validProductIds}`);
+      
+      if (!res.ok) {
+        throw new Error(`Failed to fetch backend prices: ${res.statusText}`);
+      }
+
+      const priceMap: Record<number, number> = await res.json();
+
+      // 2. Map prices back using the numeric product ID
+      parsedCart = parsedCart.map((item) => {
+        const rawProductId = Number(item.productId);
+        const targetProductId = !isNaN(rawProductId) && rawProductId > 0 ? rawProductId : 1;
+        
+        // Use fetched backend price, or keep existing unitPrice as safety fallback
+        const backendPrice = priceMap[targetProductId] ?? item.unitPrice ?? item.price ?? 0;
+
+        return {
+          ...item,
+          productId: targetProductId,
+          unitPrice: backendPrice,
+          price: backendPrice,
+        };
+      });
+    } catch (err) {
+      console.error('Price synchronization failed:', err);
+    }
+
     setCartItems(parsedCart);
 
     const token = localStorage.getItem('token');
     if (token) {
       fetchUserAndAddresses(token);
     }
-  }, []);
+  };
+
+  syncCartWithBackendPrices();
+}, [API_BASE_URL]);
 
   const fetchUserAndAddresses = async (token: string) => {
     setLoading(true);
@@ -90,7 +141,7 @@ export default function CheckoutPage() {
 
       setStep('address');
     } catch (e) {
-      console.error('Failed to load user or addresses', e);
+      console.error('Failed to load addresses:', e);
     } finally {
       setLoading(false);
     }
@@ -114,7 +165,7 @@ export default function CheckoutPage() {
         setUser(data.user);
         await fetchUserAndAddresses(data.access_token);
       } else {
-        alert('Invalid email or password');
+        alert('Invalid credentials');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -129,7 +180,7 @@ export default function CheckoutPage() {
     if (!token) return;
 
     if (!newAddress.label.trim()) {
-      alert('Please enter an address label (e.g. Home, Work)');
+      alert('Address label is required');
       return;
     }
 
@@ -206,6 +257,8 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-12">
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Step-by-Step Checkout Flow */}
         <div className="lg:col-span-2 space-y-6">
           <AuthStep
             isActive={step === 'auth'}
@@ -242,12 +295,14 @@ export default function CheckoutPage() {
           />
         </div>
 
+        {/* Lightweight Order Summary (Only Text Details, No 3D Canvas / Large Assets) */}
         <OrderSummary
           cartItems={cartItems}
           subtotal={subtotal}
           shipping={shipping}
           grandTotal={grandTotal}
         />
+        
       </div>
     </div>
   );

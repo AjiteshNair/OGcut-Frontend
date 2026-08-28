@@ -28,7 +28,7 @@ export default function CartPage() {
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    const loadAndNormalizeCart = () => {
+    const loadAndNormalizeCart = async () => {
       try {
         const savedCart = localStorage.getItem('cart_items');
         if (savedCart) {
@@ -39,30 +39,22 @@ export default function CartPage() {
             const isCustom = item.type === 'custom' || !!item.placements;
 
             if (!isCustom) {
-              return { ...item, type: 'standard' };
+              return { ...item, type: 'standard', price: item.price || 0 };
             }
 
             // Standardize placements so CustomCartItemRow can find image URLs & scale properly
             const normalizedPlacements = (item.placements || []).map((p: any) => ({
               place: p.place || p.zone || 'front',
               zone: p.place || p.zone || 'front',
-              
-              // Image URL fallbacks
               imgurl: p.imgurl || p.imageUrl || p.image || '',
               imageUrl: p.imgurl || p.imageUrl || p.image || '',
               image: p.imgurl || p.imageUrl || p.image || '',
-              
-              // Coordinate fallbacks (Support xvalue/yvalue & legacy coordinates object)
               xvalue: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
               yvalue: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
               x: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
               y: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
-
-              // Scale / Zoom fallbacks (CRITICAL: added zoom support here)
               zoom: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
               scale: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
-
-              // Bounds
               width: p.width ?? p.coordinates?.width ?? 400,
               height: p.height ?? p.coordinates?.height ?? 400,
               centerX: p.centerX ?? p.printZoneBounds?.centerX ?? 0,
@@ -74,11 +66,49 @@ export default function CartPage() {
             return {
               ...item,
               type: 'custom',
+              price: item.price || 0,
               placements: normalizedPlacements,
             };
           });
 
+          // 1. Instantly set items so UI renders layout structures
           setCartItems(normalizedCart);
+
+          // 2. Extract unique product IDs and fetch authoritative prices
+          const productIds = Array.from(
+            new Set(
+              normalizedCart
+                .map((item: any) => item.productId || item.pid || item.id)
+                .filter(Boolean)
+            )
+          ).join(',');
+
+          if (productIds) {
+            const res = await fetch(`${API_BASE_URL}/products/prices?ids=${productIds}`);
+
+            if (!res.ok) {
+              throw new Error(`Failed to fetch product prices: ${res.statusText}`);
+            }
+
+            const priceMap: Record<number, number> = await res.json();
+
+            // Update items in state with authoritative prices or throw error if missing
+            setCartItems((prevItems) =>
+              prevItems.map((item) => {
+                const pId = (item as any).productId || (item as any).pid || item.id;
+                const fetchedPrice = priceMap[Number(pId)];
+
+                if (fetchedPrice === undefined) {
+                  throw new Error(`Missing price for product ID ${pId}`);
+                }
+
+                return {
+                  ...item,
+                  price: fetchedPrice,
+                };
+              })
+            );
+          }
         } else {
           setCartItems([]);
         }
@@ -97,7 +127,7 @@ export default function CartPage() {
           }
         }
       } catch (err) {
-        console.error('Failed to load cart items:', err);
+        console.error('Failed to load cart items or fetch prices:', err);
       } finally {
         setIsLoaded(true);
       }
@@ -109,13 +139,13 @@ export default function CartPage() {
     // 2. Refresh cart state whenever window regains focus (e.g. returning from /edit)
     window.addEventListener('focus', loadAndNormalizeCart);
     return () => window.removeEventListener('focus', loadAndNormalizeCart);
-  }, []);
+  }, [API_BASE_URL]);
+
   const saveCartToStorage = (updatedItems: CartItem[]) => {
     setCartItems(updatedItems);
     localStorage.setItem('cart_items', JSON.stringify(updatedItems));
     window.dispatchEvent(new Event('cart-updated'));
   };
-
 
   const handleRemoveItem = (id: string) => {
     saveCartToStorage(cartItems.filter((item) => item.id !== id));
@@ -149,7 +179,7 @@ export default function CartPage() {
   };
 
   const calculateSubtotal = () => {
-    return cartItems.reduce((acc, item) => acc + (item.price) * (item.quantity), 0);
+    return cartItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0);
   };
 
   const handleLogout = () => {
@@ -307,7 +337,9 @@ export default function CartPage() {
               <div className="space-y-2 text-xs text-slate-600">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-bold text-slate-800">₹{calculateSubtotal()}</span>
+                  <span className="font-bold text-slate-800">
+                    ₹{calculateSubtotal().toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Estimated Shipping</span>
@@ -317,7 +349,7 @@ export default function CartPage() {
 
               <div className="border-t border-slate-100 pt-3 flex justify-between text-sm font-black text-slate-900">
                 <span>Total</span>
-                <span>₹{calculateSubtotal()}</span>
+                <span>₹{calculateSubtotal().toLocaleString()}</span>
               </div>
 
               <button
