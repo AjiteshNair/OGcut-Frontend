@@ -11,8 +11,8 @@ const CANVAS_SIZE = 2048;
 const DEFAULT_ZONES: Record<Zone, ZoneConfig> = {
   front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
   back: { x: 1536, y: 1325, clipWidth: 620, clipHeight: 911 },
-  leftSleeve: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
-  rightSleeve: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
+  left: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
+  right: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
 };
 
 export interface AdminPlacementData {

@@ -14,28 +14,30 @@ interface OrderAddress {
   pincode?: string;
 }
 
+interface OrderPlacement {
+  place?: string;
+  zone?: string;
+}
+
 interface OrderItem {
-  id?: string;
-  _id?: string;
-  title?: string;
-  name?: string;
-  type?: 'custom' | 'standard';
+  id?: number | string;
   size?: string;
   quantity: number;
   unitPrice?: number | string;
   price?: number | string;
+  color?: string;
   fabricColor?: string;
-  thumbnailUrl?: string;
-  image?: string;
-  placements?: Array<{ zone: string }>;
-  customShirtOrder?: {
-    fabricColor?: string;
-    placements?: Array<{ zone: string }>;
+  placements?: OrderPlacement[];
+  product?: {
+    title?: string;
+    name?: string;
+    images?: Array<{ url: string }>;
   };
 }
 
 interface OrderDetails {
-  id: string;
+  id: number | string;
+  orderCode?: string;
   totalAmount: number | string;
   status: string;
   paymentStatus?: string;
@@ -48,15 +50,18 @@ function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Accept both ?id= and ?orderId= parameter formats
-  const orderId = searchParams.get('id') || searchParams.get('orderId');
+  // 1. Accept orderCode, id, or orderId query parameters
+  const orderIdentifier =
+    searchParams.get('orderCode') ||
+    searchParams.get('id') ||
+    searchParams.get('orderId');
 
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderId) {
+    if (!orderIdentifier) {
       setLoading(false);
       return;
     }
@@ -65,7 +70,7 @@ function OrderSuccessContent() {
     const token = localStorage.getItem('token');
 
     // Fetch order directly from backend database
-    fetch(`${API_BASE_URL}/orders/${orderId}`, {
+    fetch(`${API_BASE_URL}/orders/${orderIdentifier}`, {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -79,7 +84,8 @@ function OrderSuccessContent() {
         return res.json();
       })
       .then((data) => {
-        setOrder(data);
+        // 2. Safely unwrap data.order returned by NestJS
+        setOrder(data.order || data);
       })
       .catch((err) => {
         console.error('Error fetching order:', err);
@@ -88,7 +94,7 @@ function OrderSuccessContent() {
       .finally(() => {
         setLoading(false);
       });
-  }, [orderId]);
+  }, [orderIdentifier]);
 
   if (loading) {
     return (
@@ -130,96 +136,103 @@ function OrderSuccessContent() {
         <div>
           <h1 className="text-2xl font-bold">Order Confirmed!</h1>
           <p className="text-sm text-neutral-400 mt-1">
-            Order ID: <span className="text-amber-500 font-mono">{order.id}</span>
+            Order Code:{' '}
+            <span className="text-amber-500 font-mono">
+              {order.orderCode || order.id}
+            </span>
           </p>
         </div>
 
         {/* Shipping Summary */}
         {shipping && (
           <div className="bg-neutral-800/50 p-4 rounded-xl text-left space-y-2 text-xs">
-            <p className="text-neutral-400 uppercase font-semibold tracking-wider">Shipping To</p>
+            <p className="text-neutral-400 uppercase font-semibold tracking-wider">
+              Shipping To
+            </p>
             {shipping.fullName && (
               <p className="font-semibold text-sm text-white">{shipping.fullName}</p>
             )}
             <p className="text-neutral-300">
-              {shipping.line1 || shipping.street}, {shipping.city}, {shipping.state} - {shipping.pincode}
+              {shipping.line1 || shipping.street}, {shipping.city}, {shipping.state} -{' '}
+              {shipping.pincode}
             </p>
-            {shipping.phone && <p className="text-neutral-400">Phone: {shipping.phone}</p>}
+            {shipping.phone && (
+              <p className="text-neutral-400">Phone: {shipping.phone}</p>
+            )}
           </div>
         )}
 
         {/* Items Summary */}
-<div className="bg-neutral-800/40 p-4 rounded-xl text-left space-y-3">
-  <p className="text-neutral-400 uppercase font-semibold tracking-wider text-xs border-b border-neutral-800 pb-2">
-    Ordered Items
-  </p>
+        <div className="bg-neutral-800/40 p-4 rounded-xl text-left space-y-3">
+          <p className="text-neutral-400 uppercase font-semibold tracking-wider text-xs border-b border-neutral-800 pb-2">
+            Ordered Items
+          </p>
 
-  {(order.items ?? []).map((item: any, idx: number) => {
-    // Detect custom shirt via explicit type or existence of placement/customShirtOrder data
-    const isCustom =
-      item.type === 'custom' ||
-      Boolean(item.customShirtOrder) ||
-      Boolean(item.placements && item.placements.length > 0);
+          {(order.items ?? []).map((item: OrderItem, idx: number) => {
+            const placements = item.placements || [];
+            const isCustom = placements.length > 0;
 
-    // Dynamic Title Selection
-    const title = isCustom
-      ? 'Custom T-Shirt'
-      : item.title || item.name || item.productTitle || item.product?.title || 'Catalog T-Shirt';
+            const title = isCustom
+              ? 'Custom Oversized T-Shirt'
+              : item.product?.title || item.product?.name || 'Catalog T-Shirt';
 
-    const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
-    const qty = Number(item.quantity) || 1;
-    const fabricColor = item.fabricColor || item.customShirtOrder?.fabricColor;
-    const placements = item.placements || item.customShirtOrder?.placements || [];
-    const imageSrc = item.thumbnailUrl || item.image;
+            const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
+            const qty = Number(item.quantity) || 1;
+            const fabricColor = item.color || item.fabricColor;
+            const imageSrc = item.product?.images?.[0]?.url;
 
-    return (
-      <div
-        key={item.id || item._id || idx}
-        className="flex items-center justify-between py-2 border-b border-neutral-800 last:border-none"
-      >
-        <div className="flex items-center gap-3">
-          {/* Color Badge for Custom Shirts */}
-          {isCustom && fabricColor && (
-            <span
-              className="w-4 h-4 rounded-full border border-neutral-600 inline-block shrink-0"
-              style={{ backgroundColor: fabricColor }}
-              title={`Fabric Color: ${fabricColor}`}
-            />
-          )}
+            return (
+              <div
+                key={item.id || idx}
+                className="flex items-center justify-between py-2 border-b border-neutral-800 last:border-none"
+              >
+                <div className="flex items-center gap-3">
+                  {/* Color Badge for Custom Shirts */}
+                  {fabricColor && (
+                    <span
+                      className="w-4 h-4 rounded-full border border-neutral-600 inline-block shrink-0"
+                      style={{ backgroundColor: fabricColor }}
+                      title={`Fabric Color: ${fabricColor}`}
+                    />
+                  )}
 
-          {/* Image Preview for Catalog Shirts */}
-          {!isCustom && imageSrc && (
-            <img
-              src={imageSrc}
-              alt={title}
-              className="w-10 h-10 object-cover rounded-lg border border-neutral-700 shrink-0"
-            />
-          )}
+                  {/* Image Preview for Catalog Shirts */}
+                  {!isCustom && imageSrc && (
+                    <img
+                      src={imageSrc}
+                      alt={title}
+                      className="w-10 h-10 object-cover rounded-lg border border-neutral-700 shrink-0"
+                    />
+                  )}
 
-          <div>
-            <p className="text-sm font-bold text-white">
-              {title}{' '}
-              <span className="text-xs font-normal text-neutral-400">
-                ({item.size || 'M'}) × {qty}
-              </span>
-            </p>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {title}{' '}
+                      <span className="text-xs font-normal text-neutral-400">
+                        ({item.size || 'M'}) × {qty}
+                      </span>
+                    </p>
 
-            {/* Print Details Tag for Custom Shirts */}
-            {isCustom && placements.length > 0 && (
-              <p className="text-[11px] text-neutral-400">
-                Prints: {placements.map((p: any) => p.zone).join(', ')}
-              </p>
-            )}
-          </div>
+                    {/* Print Details Tag for Custom Shirts */}
+                    {isCustom && (
+                      <p className="text-[11px] text-neutral-400">
+                        Prints:{' '}
+                        {placements
+                          .map((p) => p.place || p.zone)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <span className="text-sm font-bold text-neutral-200">
+                  ₹{itemPrice * qty}
+                </span>
+              </div>
+            );
+          })}
         </div>
-
-        <span className="text-sm font-bold text-neutral-200">
-          ₹{itemPrice * qty}
-        </span>
-      </div>
-    );
-  })}
-</div>
 
         <div className="flex justify-between font-bold text-base pt-2 border-t border-neutral-800">
           <span>Total Paid</span>

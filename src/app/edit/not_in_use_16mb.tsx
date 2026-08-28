@@ -5,7 +5,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useGLTF, Stage, OrbitControls, Center } from '@react-three/drei';
 import * as THREE from 'three';
 
-type Zone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
+type Zone = 'front' | 'back' | 'left' | 'right';
 
 interface ZoneConfig {
   x: number;
@@ -19,8 +19,8 @@ const CANVAS_SIZE = 2048;
 const ZONE_COLORS: Record<Zone, { stroke: string; fill: string; fillActive: string }> = {
   front: { stroke: '#3b82f6', fill: 'rgba(59, 130, 246, 0.08)', fillActive: 'rgba(59, 130, 246, 0.25)' },
   back: { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.08)', fillActive: 'rgba(16, 185, 129, 0.25)' },
-  leftSleeve: { stroke: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.08)', fillActive: 'rgba(139, 92, 246, 0.25)' },
-  rightSleeve: { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.08)', fillActive: 'rgba(245, 158, 11, 0.25)' },
+  left: { stroke: '#8b5cf6', fill: 'rgba(139, 92, 246, 0.08)', fillActive: 'rgba(139, 92, 246, 0.25)' },
+  right: { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.08)', fillActive: 'rgba(245, 158, 11, 0.25)' },
 };
 
 // --- 3D T-SHIRT RENDER ---
@@ -75,8 +75,8 @@ export default function TshirtConfigurator() {
   const [zones, setZones] = useState<Record<Zone, ZoneConfig>>({
     front: { x: 512, y: 1024, clipWidth: 620, clipHeight: 820 },
     back: { x: 1536, y: 1024, clipWidth: 620, clipHeight: 820 },
-    leftSleeve: { x: 512, y: 320, clipWidth: 420, clipHeight: 420 },
-    rightSleeve: { x: 1536, y: 320, clipWidth: 420, clipHeight: 420 },
+    left: { x: 512, y: 320, clipWidth: 420, clipHeight: 420 },
+    right: { x: 1536, y: 320, clipWidth: 420, clipHeight: 420 },
   });
 
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);

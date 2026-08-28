@@ -1,32 +1,43 @@
-import { OrderItemPayload, FormattedOrderItem } from '@/types/checkout';
+import { OrderItemPayload, FormattedOrderItem, FormattedPlacement } from '@/types/checkout';
 
 export const getItemPrice = (item: OrderItemPayload): number => {
   const val = item.unitPrice ?? item.price ?? 0;
   return Number(val) || 0;
 };
 
+// Helper to normalize zone strings into allowed backend placement values
+const normalizePlace = (zone?: string): 'front' | 'back' | 'left' | 'right' => {
+  if (!zone) {
+    throw new Error('Placement zone is missing. Valid zones are: front, back, left, right.');
+  }
+
+  const lower = zone.trim().toLowerCase();
+
+  if (lower === 'front') return 'front';
+  if (lower === 'back') return 'back';
+  if (lower === 'left' || lower === 'leftsleeve') return 'left';
+  if (lower === 'right' || lower === 'rightsleeve') return 'right';
+
+  throw new Error(`Invalid placement zone "${zone}". Must be one of: front, back, left, right.`);
+};
+
 export const formatCartItemsForBackend = (cartItems: OrderItemPayload[]): FormattedOrderItem[] => {
   return cartItems.map((item) => {
-    const isCustom =
-      item.type === 'custom' ||
-      Boolean(item.customShirtOrder) ||
-      Boolean(item.placements && item.placements.length > 0);
+    const rawPlacements = item.placements || [];
 
-    const rawPlacements = item.customShirtOrder?.placements || item.placements || [];
+    const formattedPlacements: FormattedPlacement[] = rawPlacements.map((p: any) => {
+      const imageUrl = p.imgurl || p.imageUrl || p.image || '';
+      // Check p.place first, then fallback to p.zone
+      const rawZone = p.place || p.zone;
 
-    const formattedPlacements = rawPlacements.map((p) => ({
-      zone: p.zone || 'front',
-      imageUrl: p.imageUrl || p.image || '',
-      x: Number(p.coordinates?.x ?? p.x ?? 0),
-      y: Number(p.coordinates?.y ?? p.y ?? 0),
-      scale: Number(p.coordinates?.scale ?? p.scale ?? 1),
-      width: Number(p.coordinates?.width ?? p.width ?? 400),
-      height: Number(p.coordinates?.height ?? p.height ?? 400),
-      centerX: Number(p.printZoneBounds?.centerX ?? p.centerX ?? 1024),
-      centerY: Number(p.printZoneBounds?.centerY ?? p.centerY ?? 1024),
-      clipWidth: Number(p.printZoneBounds?.clipWidth ?? p.clipWidth ?? 800),
-      clipHeight: Number(p.printZoneBounds?.clipHeight ?? p.clipHeight ?? 1000),
-    }));
+      return {
+        place: normalizePlace(rawZone),
+        imgurl: imageUrl,
+        xvalue: Number(p.xvalue ?? p.coordinates?.x ?? p.x ?? 0),
+        yvalue: Number(p.yvalue ?? p.coordinates?.y ?? p.y ?? 0),
+        zoom: Number(p.zoom ?? p.coordinates?.scale ?? p.scale ?? 1),
+      };
+    });
 
     const rawId = item.productId ?? item.id;
     const parsedId = Number(rawId);
@@ -36,6 +47,7 @@ export const formatCartItemsForBackend = (cartItems: OrderItemPayload[]): Format
       productId,
       quantity: Number(item.quantity) || 1,
       size: item.size ?? 'M',
+      color: item.color || undefined,
       unitPrice: getItemPrice(item),
       ...(formattedPlacements.length > 0 && { placements: formattedPlacements }),
     };

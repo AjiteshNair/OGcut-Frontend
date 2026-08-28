@@ -13,8 +13,8 @@ const AVAILABLE_SIZES: ShirtSize[] = ['S', 'M', 'L', 'XL', '2XL'];
 const DEFAULT_ZONES: Record<Zone, ZoneConfig> = {
   front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
   back: { x: 1536, y: 1325, clipWidth: 620, clipHeight: 911 },
-  leftSleeve: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
-  rightSleeve: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
+  left: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
+  right: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
 };
 
 function MiniTshirt({ texture }: { texture: THREE.CanvasTexture | null }) {
@@ -69,14 +69,18 @@ function CartItemModel({ item }: { item: CustomCartItem }) {
         const imageUrl = placement.imgurl || placement.imageUrl || placement.image;
         if (!imageUrl) return resolve();
 
-        const rawPlace = placement.place || placement.zone || 'front';
-        let zoneKey: Zone = 'front';
-        if (rawPlace === 'front') zoneKey = 'front';
-        else if (rawPlace === 'back') zoneKey = 'back';
-        else if (rawPlace === 'left' || rawPlace === 'leftSleeve') zoneKey = 'leftSleeve';
-        else if (rawPlace === 'right' || rawPlace === 'rightSleeve') zoneKey = 'rightSleeve';
+        const rawPlace = placement.zone;
+        if (!rawPlace) {
+          throw new Error(`Missing placement zone/place property for item ID: ${item.id}`);
+        }
 
-        const zoneConfig = DEFAULT_ZONES[zoneKey] || DEFAULT_ZONES.front;
+        const validZones: Zone[] = ['front', 'back', 'left', 'right'];
+        if (!validZones.includes(rawPlace as Zone)) {
+          throw new Error(`Unrecognized placement zone "${rawPlace}" on cart item.`);
+        }
+
+        const zoneKey = rawPlace as Zone;
+        const zoneConfig = DEFAULT_ZONES[zoneKey];
         const { x: centerX, y: centerY, clipWidth, clipHeight } = zoneConfig;
 
         const img = new Image();

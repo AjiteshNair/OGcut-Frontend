@@ -239,10 +239,13 @@ useEffect(() => {
       });
 
       if (res.ok) {
-        const order = await res.json();
-        localStorage.removeItem('cart');
+        const data = await res.json(); // 👈 Extract whole response payload
+        const createdOrder = data.order; // 👈 Extract nested order object
+
         localStorage.removeItem('cart_items');
-        router.push(`/order-success?id=${order.id}`);
+
+        router.push(`/order-success?orderCode=${createdOrder.orderCode}`);
+        
       } else {
         const err = await res.json();
         alert(`Order placement failed: ${err.message || 'Error occurred'}`);

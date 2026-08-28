@@ -9,8 +9,8 @@ import { Zone } from '@/types/customization';
 const ZONE_ROTATIONS: Record<Zone, number> = {
   front: 0,
   back: Math.PI,
-  rightSleeve: -Math.PI / 2,
-  leftSleeve: Math.PI / 2,
+  right: -Math.PI / 2,
+  left: Math.PI / 2,
 };
 
 interface TshirtProps {

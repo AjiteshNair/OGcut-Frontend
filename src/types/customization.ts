@@ -1,4 +1,4 @@
-export type Zone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
+export type Zone = 'front' | 'back' | 'left' | 'right';
 
 export type ShirtSize = 'S' | 'M' | 'L' | 'XL' | '2XL';
 

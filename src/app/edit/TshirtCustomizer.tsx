@@ -6,7 +6,7 @@ import { useGLTF, OrbitControls, Center } from '@react-three/drei';
 import * as THREE from 'three';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-type Zone = 'front' | 'back' | 'leftSleeve' | 'rightSleeve';
+type Zone = 'front' | 'back' | 'left' | 'right';
 
 interface ZoneConfig {
   x: number;
@@ -64,8 +64,8 @@ const PRESET_COLORS = [
 const ZONE_ROTATIONS: Record<Zone, number> = {
   front: 0,
   back: Math.PI,
-  rightSleeve: -Math.PI / 2,
-  leftSleeve: Math.PI / 2,
+  right: -Math.PI / 2,
+  left: Math.PI / 2,
 };
 
 function Tshirt({
@@ -164,8 +164,8 @@ function TshirtConfiguratorContent({ onSubmitCustomization }: TshirtConfigurator
   const [zones, setZones] = useState<Record<Zone, ZoneConfig>>({
     front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
     back: { x: 1536, y: 1325, clipWidth: 620, clipHeight: 911 },
-    leftSleeve: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
-    rightSleeve: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
+    left: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
+    right: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
   });
 
   const [zoneImages, setZoneImages] = useState<Partial<Record<Zone, ZoneImageData>>>({});

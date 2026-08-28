@@ -15,8 +15,8 @@ const CANVAS_SIZE = 2048;
 const INITIAL_ZONES: Record<Zone, ZoneConfig> = {
   front: { x: 598, y: 1420, clipWidth: 620, clipHeight: 784 },
   back: { x: 1536, y: 1325, clipWidth: 620, clipHeight: 911 },
-  leftSleeve: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
-  rightSleeve: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
+  left: { x: 625, y: 280, clipWidth: 310, clipHeight: 300 },
+  right: { x: 1450, y: 280, clipWidth: 330, clipHeight: 300 },
 };
 
 function TshirtConfiguratorContent() {
@@ -73,8 +73,8 @@ function TshirtConfiguratorContent() {
                   let zoneKey: Zone = 'front';
                   if (rawPlace === 'front') zoneKey = 'front';
                   else if (rawPlace === 'back') zoneKey = 'back';
-                  else if (rawPlace === 'left' || rawPlace === 'leftSleeve') zoneKey = 'leftSleeve';
-                  else if (rawPlace === 'right' || rawPlace === 'rightSleeve') zoneKey = 'rightSleeve';
+                  else if (rawPlace === 'left') zoneKey = 'left';
+                  else if (rawPlace === 'right') zoneKey = 'right';
 
                   const cfg = INITIAL_ZONES[zoneKey] || INITIAL_ZONES.front;
                   const aspect = img.width / img.height;

@@ -55,34 +55,27 @@ export interface OrderItemPayload {
   name?: string;
   thumbnailUrl?: string;
   image?: string;
-  customShirtOrder?: {
-    fabricColor: string;
-    placements: Placement[];
-  };
   quantity: number;
   size?: string;
   unitPrice?: number;
   price?: number;
-  fabricColor?: string;
+  color?: string;
   placements?: Placement[];
+}
+
+export interface FormattedPlacement {
+  place: 'front' | 'back' | 'left' | 'right';
+  imgurl: string;
+  xvalue: number;
+  yvalue: number;
+  zoom: number;
 }
 
 export interface FormattedOrderItem {
   productId: number;
   quantity: number;
   size: string;
+  color?: string;
   unitPrice: number;
-  placements?: Array<{
-    zone: string;
-    imageUrl: string;
-    x: number;
-    y: number;
-    scale: number;
-    width: number;
-    height: number;
-    centerX: number;
-    centerY: number;
-    clipWidth: number;
-    clipHeight: number;
-  }>;
+  placements?: FormattedPlacement[];
 }
