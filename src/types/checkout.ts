@@ -60,6 +60,7 @@ export interface OrderItemPayload {
   unitPrice?: number;
   price?: number;
   color?: string;
+  fabricColor?: string;
   placements?: Placement[];
 }
 

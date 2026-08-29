@@ -24,15 +24,21 @@ const normalizePlace = (zone?: string): 'front' | 'back' | 'left' | 'right' => {
 export const formatCartItemsForBackend = (cartItems: OrderItemPayload[]): FormattedOrderItem[] => {
   return cartItems.map((item) => {
     const rawPlacements = item.placements || [];
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>")
+console.log(item)
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     const formattedPlacements: FormattedPlacement[] = rawPlacements.map((p: any) => {
       const imageUrl = p.imgurl || p.imageUrl || p.image || '';
       // Check p.place first, then fallback to p.zone
       const rawZone = p.place || p.zone;
-
+      alert(p.fabricColor)
+      
       return {
         place: normalizePlace(rawZone),
         imgurl: imageUrl,
+        color : p.color,
+        fabricColor: p.fabricColor,
         xvalue: Number(p.xvalue ?? p.coordinates?.x ?? p.x ?? 0),
         yvalue: Number(p.yvalue ?? p.coordinates?.y ?? p.y ?? 0),
         zoom: Number(p.zoom ?? p.coordinates?.scale ?? p.scale ?? 1),
@@ -47,7 +53,7 @@ export const formatCartItemsForBackend = (cartItems: OrderItemPayload[]): Format
       productId,
       quantity: Number(item.quantity) || 1,
       size: item.size ?? 'M',
-      color: item.color || undefined,
+      color: item.fabricColor || undefined,
       unitPrice: getItemPrice(item),
       ...(formattedPlacements.length > 0 && { placements: formattedPlacements }),
     };
