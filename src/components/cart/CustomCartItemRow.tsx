@@ -160,10 +160,10 @@ function CartItemModel({ item }: { item: CustomCartItem }) {
 
 interface CustomCartItemRowProps {
   item: CustomCartItem;
-  onQuantityChange: (id: string, delta: number) => void;
-  onSizeChange: (id: string, size: ShirtSize) => void;
+  onQuantityChange: (id: number, delta: number) => void;
+  onSizeChange: (id: number, newSize: ShirtSize) => void;
   onDuplicate: (item: CustomCartItem) => void;
-  onRemove: (id: string) => void;
+  onRemove: (id: number) => void;
 }
 
 export const CustomCartItemRow: React.FC<CustomCartItemRowProps> = ({

@@ -270,7 +270,7 @@ function TshirtConfiguratorContent() {
       };
 
       const existingCart: CartItem[] = JSON.parse(localStorage.getItem('cart_items') || '[]');
-      const targetId = editId || `cart_${Date.now()}`;
+      const targetId = editId ? Number(editId) : Date.now();
       const itemIndex = existingCart.findIndex((i) => i.id === targetId);
       const newItem = { id: targetId, ...cartItemPayload };
 

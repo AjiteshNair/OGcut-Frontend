@@ -147,11 +147,11 @@ export default function CartPage() {
     window.dispatchEvent(new Event('cart-updated'));
   };
 
-  const handleRemoveItem = (id: string) => {
-    saveCartToStorage(cartItems.filter((item) => item.id !== id));
+ const handleRemoveItem = (id: number) => {
+  saveCartToStorage(cartItems.filter((item) => item.id !== id));
   };
 
-  const handleQuantityChange = (id: string, delta: number) => {
+  const handleQuantityChange = (id: number, delta: number) => {
     const updated = cartItems.map((item) => {
       if (item.id === id) {
         return { ...item, quantity: Math.max(1, (item.quantity || 1) + delta) };
@@ -161,7 +161,7 @@ export default function CartPage() {
     saveCartToStorage(updated);
   };
 
-  const handleSizeChange = (id: string, newSize: ShirtSize) => {
+  const handleSizeChange = (id: number, newSize: ShirtSize) => {
     const updated = cartItems.map((item) => {
       if (item.id === id) return { ...item, size: newSize };
       return item;
@@ -172,7 +172,7 @@ export default function CartPage() {
   const handleDuplicateItem = (itemToDuplicate: CustomCartItem) => {
     const newItem: CustomCartItem = {
       ...itemToDuplicate,
-      id: `cart_${Date.now()}`,
+      id: Date.now(), // Numeric timestamp ID
       quantity: 1,
     };
     saveCartToStorage([...cartItems, newItem]);

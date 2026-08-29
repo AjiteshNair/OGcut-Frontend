@@ -8,9 +8,9 @@ const AVAILABLE_SIZES: ShirtSize[] = ['S', 'M', 'L', 'XL', '2XL'];
 
 interface StandardCartItemRowProps {
   item: StandardCartItem;
-  onQuantityChange: (id: string, delta: number) => void;
-  onSizeChange: (id: string, size: ShirtSize) => void;
-  onRemove: (id: string) => void;
+  onQuantityChange: (id: number, delta: number) => void;
+  onSizeChange: (id: number, newSize: ShirtSize) => void;
+  onRemove: (id: number) => void;
 }
 
 export const StandardCartItemRow: React.FC<StandardCartItemRowProps> = ({

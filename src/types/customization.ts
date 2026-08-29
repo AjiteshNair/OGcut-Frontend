@@ -41,7 +41,7 @@ export interface Product {
 
 export interface CustomCartItem {
   type: 'custom';
-  id: string; // e.g. "custom_1710000000"
+  id: number; // Pure numeric ID
   size: ShirtSize | string;
   fabricColor: string;
   placements: Placement[];
@@ -54,10 +54,9 @@ export interface CustomCartItem {
   thumbnailUrl?: string;
 }
 
-// --- 2. Standard Store Item Types ---
 export interface StandardCartItem {
   type: 'standard';
-  id: string; // Cart line-item ID (or productId)
+  id: number; // Pure numeric ID
   productId: number;
   title: string;
   name?: string;
