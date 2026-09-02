@@ -446,16 +446,19 @@ function TshirtConfiguratorContent({ onSubmitCustomization }: TshirtConfigurator
       setIsSubmitting(true);
       const existingCart = JSON.parse(localStorage.getItem('cart_items') || '[]');
 
-      // If editing an existing item, replace it in the array
-      const newItemId = editId || `cart_${Date.now()}`;
+      // Keep a unique row id for the cart entry, but preserve the real product id separately for backend price lookups.
+      const customProductId = 1;
+      const newItemId = editId ? Number(editId) : Date.now() + Math.random();
       const updatedCartItem = {
         id: newItemId,
+        productId: customProductId,
+        pid: customProductId,
         fabricColor: payload.fabricColor,
         placements: payload.placements
       };
 
       if (editId) {
-        const itemIndex = existingCart.findIndex((item: any) => item.id === editId);
+        const itemIndex = existingCart.findIndex((item: any) => item.id === Number(editId));
         if (itemIndex > -1) {
           existingCart[itemIndex] = updatedCartItem;
         } else {

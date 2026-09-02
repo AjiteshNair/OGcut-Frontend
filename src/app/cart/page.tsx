@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CartItem, CustomCartItem, ShirtSize } from '@/types/customization';
+import { normalizeCartItems } from '@/utils/normalization';
 import { CustomCartItemRow } from '@/components/cart/CustomCartItemRow';
 import { StandardCartItemRow } from '@/components/cart/StandardCartItemRow';
 
@@ -33,81 +34,54 @@ export default function CartPage() {
         const savedCart = localStorage.getItem('cart_items');
         if (savedCart) {
           const parsed = JSON.parse(savedCart);
-
-          // Normalize legacy and new placement data formats
-          const normalizedCart = parsed.map((item: any) => {
-            const isCustom = item.type === 'custom' || !!item.placements;
-
-            if (!isCustom) {
-              return { ...item, type: 'standard', price: item.price || 0 };
-            }
-
-            // Standardize placements so CustomCartItemRow can find image URLs & scale properly
-            const normalizedPlacements = (item.placements || []).map((p: any) => ({
-              place: p.place || p.zone || 'front',
-              zone: p.place || p.zone || 'front',
-              imgurl: p.imgurl || p.imageUrl || p.image || '',
-              imageUrl: p.imgurl || p.imageUrl || p.image || '',
-              image: p.imgurl || p.imageUrl || p.image || '',
-              xvalue: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
-              yvalue: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
-              x: p.xvalue ?? p.x ?? p.coordinates?.x ?? 0,
-              y: p.yvalue ?? p.y ?? p.coordinates?.y ?? 0,
-              zoom: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
-              scale: p.zoom ?? p.scale ?? p.coordinates?.scale ?? 1,
-              width: p.width ?? p.coordinates?.width ?? 400,
-              height: p.height ?? p.coordinates?.height ?? 400,
-              centerX: p.centerX ?? p.printZoneBounds?.centerX ?? 0,
-              centerY: p.centerY ?? p.printZoneBounds?.centerY ?? 0,
-              clipWidth: p.clipWidth ?? p.printZoneBounds?.clipWidth ?? 0,
-              clipHeight: p.clipHeight ?? p.printZoneBounds?.clipHeight ?? 0,
-            }));
-
-            return {
-              ...item,
-              type: 'custom',
-              price: item.price || 0,
-              placements: normalizedPlacements,
-            };
-          });
+          const normalizedCart = normalizeCartItems(parsed);
 
           // 1. Instantly set items so UI renders layout structures
           setCartItems(normalizedCart);
 
-          // 2. Extract unique product IDs and fetch authoritative prices
+          // 2. Only use real product IDs for backend price lookups; do not let cart row IDs or custom timestamps leak in.
           const productIds = Array.from(
             new Set(
               normalizedCart
-                .map((item: any) => item.productId || item.pid || item.id)
-                .filter(Boolean)
+                .map((item: any) => {
+                  const rawId = item.productId ?? item.pid ?? item.id;
+                  const parsed = Number(rawId);
+                  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+                })
+                .filter((value): value is number => value !== null)
             )
           ).join(',');
 
           if (productIds) {
-            const res = await fetch(`${API_BASE_URL}/products/prices?ids=${productIds}`);
+            try {
+              const res = await fetch(`${API_BASE_URL}/products/prices?ids=${productIds}`);
 
-            if (!res.ok) {
-              throw new Error(`Failed to fetch product prices: ${res.statusText}`);
+              if (!res.ok) {
+                console.error(`Failed to fetch product prices: ${res.status} ${res.statusText}`);
+              } else {
+                const priceMap: Record<number, number> = await res.json();
+
+                // Update items in state with authoritative prices where available
+                setCartItems((prevItems) =>
+                  prevItems.map((item) => {
+                    const pId = (item as any).productId || (item as any).pid || item.id;
+                    const fetchedPrice = priceMap[Number(pId)];
+
+                    if (fetchedPrice === undefined) {
+                      console.warn(`No price returned for product ID ${pId}; keeping existing price.`);
+                      return item; // keep existing price
+                    }
+
+                    return {
+                      ...item,
+                      price: fetchedPrice,
+                    };
+                  })
+                );
+              }
+            } catch (err) {
+              console.error('Error fetching product prices:', err);
             }
-
-            const priceMap: Record<number, number> = await res.json();
-
-            // Update items in state with authoritative prices or throw error if missing
-            setCartItems((prevItems) =>
-              prevItems.map((item) => {
-                const pId = (item as any).productId || (item as any).pid || item.id;
-                const fetchedPrice = priceMap[Number(pId)];
-
-                if (fetchedPrice === undefined) {
-                  throw new Error(`Missing price for product ID ${pId}`);
-                }
-
-                return {
-                  ...item,
-                  price: fetchedPrice,
-                };
-              })
-            );
           }
         } else {
           setCartItems([]);

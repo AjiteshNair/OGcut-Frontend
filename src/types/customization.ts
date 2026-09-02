@@ -13,7 +13,7 @@ export interface ZoneConfig {
 
 // --- 1. Custom 3D Shirt Types ---
 export interface Placement {
-  zone: Zone | string;
+  zone: Zone | string | null;
   imageUrl: string;
   x: number;
   y: number;
@@ -24,6 +24,31 @@ export interface Placement {
   centerY: number;
   clipWidth: number;
   clipHeight: number;
+
+  // Legacy aliases retained only for compatibility with older payloads.
+  place?: string;
+  imgurl?: string;
+  image?: string;
+  xvalue?: number;
+  yvalue?: number;
+  zoom?: number;
+  color?: string;
+  fabricColor?: string;
+  coordinates?: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    width?: number;
+    height?: number;
+  };
+  printZoneBounds?: {
+    centerX?: number;
+    centerY?: number;
+    clipWidth?: number;
+    clipHeight?: number;
+    x?: number;
+    y?: number;
+  };
 }
 export interface Product {
   id: number;
@@ -42,8 +67,11 @@ export interface Product {
 export interface CustomCartItem {
   type: 'custom';
   id: number; // Pure numeric ID
+  productId?: number;
+  pid?: number;
   size: ShirtSize | string;
-  fabricColor: string;
+  fabricColor?: string;
+  color?: string;
   placements: Placement[];
   price: number;
   unitPrice?: number;
@@ -67,7 +95,7 @@ export interface StandardCartItem {
   quantity: number;
   size?: ShirtSize | string;
   color?: string;
-  
+
   // Optional fields to satisfy discriminated union checks
   fabricColor?: string;
   placements?: Placement[];

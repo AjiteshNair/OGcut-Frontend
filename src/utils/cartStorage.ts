@@ -39,10 +39,10 @@ export const updateStandardItemQuantity = (
       currentCart[itemIndex] = { ...item, quantity: newQty };
     }
   } else if (delta > 0) {
-    // Add new standard cart item
+    // Add new standard cart item: keep a unique row id, but preserve the real productId for price lookups.
     const newItem: StandardCartItem = {
       type: 'standard',
-      id: `std_${product.id}`,
+      id: Date.now() + Math.random(),
       productId: product.id,
       title: product.name,
       thumbnailUrl: product.image || '',

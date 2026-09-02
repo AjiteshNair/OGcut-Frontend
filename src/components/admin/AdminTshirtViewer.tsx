@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Zone, ZoneConfig } from '@/types/customization';
 import { Tshirt } from '@/components/TShirtModel';
 import { CustomCartItem, Placement } from '@/types/customization';
+import { normalizePlacements, normalizeZone } from '@/utils/normalization';
 
 const CANVAS_SIZE = 2048;
 
@@ -53,21 +54,25 @@ export default function AdminTshirtViewer({
 
   // Load Placement Artworks
   useEffect(() => {
-    if (!placements || placements.length === 0) {
+    const normalizedPlacements = normalizePlacements(placements ?? []);
+
+    if (normalizedPlacements.length === 0) {
       setLoadedImages({});
       return;
     }
 
     Promise.all(
-      placements.map(
+      normalizedPlacements.map(
         (p) =>
           new Promise<{ zone: Zone; data: any } | null>((resolve) => {
-            if (!p.imgurl) return resolve(null);
+            if (!p.imageUrl) return resolve(null);
 
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => {
-              const cfg = INITIAL_ZONES[p.place];
+              const zoneKey = normalizeZone(p.zone);
+              if (!zoneKey) return resolve(null);
+              const cfg = INITIAL_ZONES[zoneKey];
               const aspect = img.width / img.height;
 
               let defaultW = cfg.clipWidth * 0.5;
@@ -78,19 +83,19 @@ export default function AdminTshirtViewer({
               }
 
               resolve({
-                zone: p.place,
+                zone: zoneKey,
                 data: {
                   element: img,
-                  x: p.xvalue,
-                  y: p.yvalue,
-                  zoom: p.zoom,
+                  x: p.x,
+                  y: p.y,
+                  zoom: p.scale,
                   width: p.width || Math.round(defaultW),
                   height: p.height || Math.round(defaultH),
                 },
               });
             };
             img.onerror = () => resolve(null);
-            img.src = p.imgurl;
+            img.src = p.imageUrl;
           })
       )
     ).then((results) => {

@@ -24,10 +24,7 @@ export const OrderSummary: React.FC<OrderSummaryProps> = ({
         {cartItems.map((item, idx) => {
           const price = getItemPrice(item);
           const qty = Number(item.quantity) || 1;
-          const isCustom =
-            item.type === 'custom' ||
-            Boolean(item.customShirtOrder) ||
-            Boolean(item.placements?.length);
+          const isCustom = item.type === 'custom' || Boolean(item.placements?.length);
 
           const displayTitle = isCustom
             ? 'Custom T-Shirt'

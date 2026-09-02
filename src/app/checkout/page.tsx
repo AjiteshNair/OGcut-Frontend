@@ -72,13 +72,16 @@ useEffect(() => {
       return;
     }
 
-    // 1. Extract valid numeric product IDs (fallback to 1 if missing or string cart ID)
+    // 1. Only include actual catalog product IDs in the price lookup; ignore custom cart row IDs like timestamps.
     const validProductIds = Array.from(
       new Set(
-        parsedCart.map((item) => {
-          const parsed = Number(item.productId);
-          return !isNaN(parsed) && parsed > 0 ? parsed : 1;
-        })
+        parsedCart
+          .map((item) => {
+            const rawId = item.productId ?? item.id;
+            const parsed = Number(rawId);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+          })
+          .filter((value): value is number => value !== null)
       )
     ).join(',');
 
@@ -91,12 +94,15 @@ useEffect(() => {
 
       const priceMap: Record<number, number> = await res.json();
 
-      // 2. Map prices back using the numeric product ID
+      // 2. Map prices back using the numeric catalog product ID only when it is valid.
       parsedCart = parsedCart.map((item) => {
-        const rawProductId = Number(item.productId);
-        const targetProductId = !isNaN(rawProductId) && rawProductId > 0 ? rawProductId : 1;
-        
-        // Use fetched backend price, or keep existing unitPrice as safety fallback
+        const rawProductId = Number(item.productId ?? item.id);
+        const targetProductId = Number.isFinite(rawProductId) && rawProductId > 0 ? rawProductId : null;
+
+        if (targetProductId === null) {
+          return item;
+        }
+
         const backendPrice = priceMap[targetProductId] ?? item.unitPrice ?? item.price ?? 0;
 
         return {

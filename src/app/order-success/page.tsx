@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { normalizeFabricColor, normalizePlacements } from '@/utils/normalization';
 
 interface OrderAddress {
   fullName?: string;
@@ -169,7 +170,7 @@ function OrderSuccessContent() {
           </p>
 
           {(order.items ?? []).map((item: OrderItem, idx: number) => {
-            const placements = item.placements || [];
+            const placements = normalizePlacements(item.placements ?? []);
             const isCustom = placements.length > 0;
 
             const title = isCustom
@@ -178,7 +179,14 @@ function OrderSuccessContent() {
 
             const itemPrice = Number(item.unitPrice ?? item.price ?? 0);
             const qty = Number(item.quantity) || 1;
-            const fabricColor = item.color || item.fabricColor;
+            let fabricColor: string | null = null;
+            try {
+              const rawColor = placements.length > 0 ? (item.fabricColor ?? item.color) : item.color;
+              fabricColor = normalizeFabricColor(rawColor) ?? null;
+            } catch (err) {
+              console.warn('Missing fabric color for order item; skipping badge:', err);
+              fabricColor = null;
+            }
             const imageSrc = item.product?.images?.[0]?.url;
 
             return (
@@ -217,10 +225,7 @@ function OrderSuccessContent() {
                     {isCustom && (
                       <p className="text-[11px] text-neutral-400">
                         Prints:{' '}
-                        {placements
-                          .map((p) => p.place || p.zone)
-                          .filter(Boolean)
-                          .join(', ')}
+                        {placements.map((p) => p.zone).filter(Boolean).join(', ')}
                       </p>
                     )}
                   </div>

@@ -8,6 +8,7 @@ import {
 } from '@/types/admin-orders';
 import Admin3DInspectorModal from '@/components/admin/Admin3DInspectorModal';
 import { CustomCartItem, Placement } from '@/types/customization';
+import { normalizeFabricColor, normalizePlacements } from '@/utils/normalization';
 
 const STATUS_OPTIONS: FrontendOrderStatus[] = [
   'PENDING',
@@ -147,25 +148,25 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const open3DInspector = (orderItem: AdminOrder['items'][0], fabricColor: string) => {
+  const open3DInspector = (orderItem: AdminOrder['items'][0], fabricColor: string | null) => {
+    const normalizedPlacements = normalizePlacements(
+      orderItem.placements.map((placement) => ({
+        zone: placement.place,
+        imageUrl: placement.imgurl,
+        x: placement.xvalue,
+        y: placement.yvalue,
+        scale: placement.zoom,
+        width: placement.width ?? 0,
+        height: placement.height ?? 0,
+      }))
+    );
+
     const customPayload: CustomCartItem = {
       type: 'custom',
       id: orderItem.id,
       size: orderItem.size,
-      fabricColor: fabricColor || '#ffffff',
-      placements: orderItem.placements.map((p) => ({
-        place: p.place,
-        zone: p.place,
-        imgurl: p.imgurl,
-        imageUrl: p.imgurl,
-        xvalue: p.xvalue,
-        x: p.xvalue,
-        yvalue: p.yvalue,
-        y: p.yvalue,
-        zoom: p.zoom,
-        width: p.width || undefined,
-        height: p.height || undefined,
-      })) as unknown as Placement[],
+      fabricColor: normalizeFabricColor(fabricColor, { required: true }) as string,
+      placements: normalizedPlacements,
       price: orderItem.unitPrice,
       quantity: orderItem.quantity,
       title: orderItem.product?.name || `Custom Product #${orderItem.pid}`,
@@ -329,10 +330,10 @@ export default function AdminOrdersPage() {
                           {order.items.some((i) => i.placements && i.placements.length > 0) ? (
                             <div className="flex flex-col gap-1 items-center">
                               {order.items.map((item) =>
-                                item.placements && item.placements.length > 0 ? (
-                                  <button
-                                    key={item.id}
-                                    onClick={() => open3DInspector(item, item.color || '#ffffff')}
+                                  item.placements && item.placements.length > 0 ? (
+                                    <button
+                                      key={item.id}
+                                      onClick={() => open3DInspector(item, item.color)}
                                     className="px-2 py-0.5 bg-amber-400/10 hover:bg-amber-400/20 text-amber-400 border border-amber-400/30 rounded text-[10px] font-semibold transition whitespace-nowrap"
                                   >
                                     Inspect Item #{item.id} ↗

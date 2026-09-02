@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Zone, ShirtSize, ZoneConfig, ZoneImageData, CartItem } from '@/types/customization';
 import { Tshirt } from '@/components/TShirtModel';
 import { DesignControls, PRESET_COLORS } from '@/components/DesignControls';
+import { normalizeFabricColor, normalizePlacements, normalizeZone } from '@/utils/normalization';
 import { uploadImageToSupabase } from '@/utils/supabase/supabaseUpload';
 
 const CANVAS_SIZE = 2048;
@@ -51,34 +52,35 @@ function TshirtConfiguratorContent() {
     if (!editId) return;
     try {
       const savedCart: CartItem[] = JSON.parse(localStorage.getItem('cart_items') || '[]');
-      const item = savedCart.find((i) => i.id === editId);
+      const item = savedCart.find((i) => String(i.id) === String(editId));
       if (!item) return;
 
-      if (item.fabricColor) setFabricColor(item.fabricColor);
+      try {
+        const nextFabricColor = normalizeFabricColor((item as any).fabricColor, { required: true });
+        if (nextFabricColor) setFabricColor(nextFabricColor);
+      } catch (err) {
+        console.error('Missing fabric color for edited item:', err);
+        return;
+      }
       if (item.size) setSelectedSize(item.size as ShirtSize);
 
-      if (Array.isArray(item.placements) && item.placements.length > 0) {
+      const normalizedPlacements = normalizePlacements(item.placements ?? []);
+      if (normalizedPlacements.length > 0) {
         Promise.all(
-          item.placements.map(
-            (p: any) =>
+          normalizedPlacements.map(
+            (placement) =>
               new Promise<{ zone: Zone; data: ZoneImageData } | null>((resolve) => {
-                const url = p.imageUrl || p.imgurl;
+                const url = placement.imageUrl;
                 if (!url) return resolve(null);
 
                 const img = new Image();
                 img.crossOrigin = 'anonymous';
                 img.onload = () => {
-                  // Normalize zone string (e.g. 'front', 'back', 'left', 'rightSleeve')
-                  let rawPlace = p.place || p.zone || 'front';
-                  let zoneKey: Zone = 'front';
-                  if (rawPlace === 'front') zoneKey = 'front';
-                  else if (rawPlace === 'back') zoneKey = 'back';
-                  else if (rawPlace === 'left') zoneKey = 'left';
-                  else if (rawPlace === 'right') zoneKey = 'right';
-
-                  const cfg = INITIAL_ZONES[zoneKey] || INITIAL_ZONES.front;
+                  const zoneKey = normalizeZone(placement.zone);
+                  if (!zoneKey) return resolve(null);
+                  const cfg = INITIAL_ZONES[zoneKey];
                   const aspect = img.width / img.height;
-                  
+
                   let defaultW = cfg.clipWidth * 0.5;
                   let defaultH = defaultW / aspect;
                   if (defaultH > cfg.clipHeight * 0.5) {
@@ -86,17 +88,17 @@ function TshirtConfiguratorContent() {
                     defaultW = defaultH * aspect;
                   }
 
-                  const customWidth = p.width ?? p.customWidth ?? Math.round(defaultW);
-                  const customHeight = p.height ?? p.customHeight ?? Math.round(defaultH);
+                  const customWidth = placement.width || Math.round(defaultW);
+                  const customHeight = placement.height || Math.round(defaultH);
 
                   resolve({
                     zone: zoneKey,
                     data: {
                       element: img,
                       dataUrl: url,
-                      x: p.xvalue ?? p.x ?? 0,
-                      y: p.yvalue ?? p.y ?? 0,
-                      scale: p.zoom ?? p.scale ?? 1,
+                      x: placement.x,
+                      y: placement.y,
+                      scale: placement.scale,
                       customWidth,
                       customHeight,
                       lockAspectRatio: true,
@@ -241,41 +243,42 @@ function TshirtConfiguratorContent() {
       const placements = await Promise.all(
         configuredZones.map(async (zKey) => {
           const imgData = zoneImages[zKey]!;
-          // If the dataUrl is already an external URL, avoid uploading again
-          const finalUrl = imgData.dataUrl.startsWith('http') 
-            ? imgData.dataUrl 
+          const finalUrl = imgData.dataUrl.startsWith('http')
+            ? imgData.dataUrl
             : await uploadImageToSupabase(imgData.dataUrl, zKey);
 
           return {
-            place: zKey.toLowerCase(),
-            imgurl: finalUrl,
+            zone: zKey,
             imageUrl: finalUrl,
-            xvalue: Number(imgData.x ?? 0),
-            yvalue: Number(imgData.y ?? 0),
-            zoom: Number(imgData.scale ?? 1),
+            x: Number(imgData.x ?? 0),
+            y: Number(imgData.y ?? 0),
+            scale: Number(imgData.scale ?? 1),
             width: imgData.customWidth,
             height: imgData.customHeight,
           };
         })
       );
 
+      const customProductId = 1;
+
       const cartItemPayload = {
-        pid: 1,
+        productId: customProductId,
+        pid: customProductId,
         type: 'custom',
         title: 'Custom 3D T-Shirt',
         size: selectedSize,
-        fabricColor,
+        fabricColor: normalizeFabricColor(fabricColor),
         placements,
         quantity: 1,
       };
 
       const existingCart: CartItem[] = JSON.parse(localStorage.getItem('cart_items') || '[]');
-      const targetId = editId ? Number(editId) : Date.now();
+      const targetId = editId ? Number(editId) : Date.now() + Math.random();
       const itemIndex = existingCart.findIndex((i) => i.id === targetId);
       const newItem = { id: targetId, ...cartItemPayload };
 
-      if (itemIndex > -1) existingCart[itemIndex] = newItem as CartItem;
-      else existingCart.push(newItem as CartItem);
+      if (itemIndex > -1) existingCart[itemIndex] = newItem as unknown as CartItem;
+      else existingCart.push(newItem as unknown as CartItem);
 
       localStorage.setItem('cart_items', JSON.stringify(existingCart));
       window.dispatchEvent(new Event('cart-updated'));

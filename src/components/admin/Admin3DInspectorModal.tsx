@@ -25,11 +25,18 @@ export default function Admin3DInspectorModal({
         
         {/* Left: 3D View Container */}
         <div className="relative flex-1 bg-black">
-          <AdminTshirtViewer
-            fabricColor={item.fabricColor}
-            placements={item.placements}
-            activeZone={activeZone}
-          />
+          {item.fabricColor ? (
+            <AdminTshirtViewer
+              fabricColor={item.fabricColor}
+              placements={item.placements}
+              activeZone={activeZone}
+            />
+          ) : (
+            <div className="p-6 text-center text-white">
+              <p className="text-lg font-semibold">Missing fabric color</p>
+              <p className="text-sm text-neutral-400 mt-2">Cannot render 3D preview without a specified fabric color for this item.</p>
+            </div>
+          )}
 
           {/* Zone View Controls */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-neutral-900/90 border border-neutral-800 p-1.5 rounded-full shadow-lg">

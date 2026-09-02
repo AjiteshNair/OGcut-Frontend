@@ -143,81 +143,16 @@ export function DesignControls({
           />
         </div>
 
-        {/* 5. Print Area Calibration */}
-        <div className="space-y-4 bg-amber-50/70 border border-amber-200 p-4 rounded-xl">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-              5. Base Print Area Calibration ({activeTab.toUpperCase()})
-            </h3>
-            <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-semibold">
-              UV Grid Config
-            </span>
-          </div>
+        {/* area definition - Base Print Area Calibration (FRONT)
+            The calibration controls have been commented out for production.
+            To restore for debugging uncomment the original block below.
 
-          <div>
-            <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
-              <span>Print Area Center X:</span>
-              <span className="font-mono font-bold">{activeZoneConfig.x}px</span>
+            ORIGINAL_BLOCK_START
+            <div className="space-y-4 bg-amber-50/70 border border-amber-200 p-4 rounded-xl">
+              ... (original calibration UI) ...
             </div>
-            <input
-              type="range"
-              min="0"
-              max={canvasSize}
-              step="5"
-              value={activeZoneConfig.x}
-              onChange={(e) => updateZoneConfig({ x: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-800"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
-              <span>Print Area Center Y:</span>
-              <span className="font-mono font-bold">{activeZoneConfig.y}px</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max={canvasSize}
-              step="5"
-              value={activeZoneConfig.y}
-              onChange={(e) => updateZoneConfig({ y: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-800"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
-              <span>Max Print Width Limit:</span>
-              <span className="font-mono font-bold">{activeZoneConfig.clipWidth}px</span>
-            </div>
-            <input
-              type="range"
-              min="100"
-              max="1200"
-              step="10"
-              value={activeZoneConfig.clipWidth}
-              onChange={(e) => updateZoneConfig({ clipWidth: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-800"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs text-amber-800 font-medium mb-1">
-              <span>Max Print Height Limit:</span>
-              <span className="font-mono font-bold">{activeZoneConfig.clipHeight}px</span>
-            </div>
-            <input
-              type="range"
-              min="100"
-              max="1200"
-              step="10"
-              value={activeZoneConfig.clipHeight}
-              onChange={(e) => updateZoneConfig({ clipHeight: parseInt(e.target.value, 10) })}
-              className="w-full h-1.5 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-800"
-            />
-          </div>
-        </div>
+            ORIGINAL_BLOCK_END
+        */}
 
         {/* 6. Layout & Boundary Preview */}
         <div className="space-y-2 border-t border-slate-100 pt-4">
@@ -238,7 +173,7 @@ export function DesignControls({
             {activeZoneImage ? (
               <div
                 style={{
-                  transform: `translate(${activeZoneImage.x / 4}px, ${activeZoneImage.y / 4}px) scale(${activeZoneImage.scale})`,
+                  transform: `translate(${(activeZoneImage.x ?? 0) / 4}px, ${(activeZoneImage.y ?? 0) / 4}px) scale(${activeZoneImage.scale ?? 1})`,
                 }}
                 className="transition-transform duration-75 ease-out pointer-events-none"
               >
@@ -246,8 +181,8 @@ export function DesignControls({
                   src={activeZoneImage.element.src}
                   alt="Design Preview"
                   style={{
-                    width: `${activeZoneImage.customWidth / 4}px`,
-                    height: `${activeZoneImage.customHeight / 4}px`,
+                    width: `${(activeZoneImage.customWidth ?? 0) / 4}px`,
+                    height: `${(activeZoneImage.customHeight ?? 0) / 4}px`,
                   }}
                   className="object-contain"
                 />
@@ -268,7 +203,7 @@ export function DesignControls({
             <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
               <span>Position Left / Right:</span>
               <span className="font-mono font-bold text-slate-900">
-                {activeZoneImage ? Math.round(activeZoneImage.x) : 0}px
+                {activeZoneImage ? Math.round(activeZoneImage.x ?? 0) : 0}px
               </span>
             </div>
             <input
@@ -287,7 +222,7 @@ export function DesignControls({
             <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
               <span>Position Up / Down:</span>
               <span className="font-mono font-bold text-slate-900">
-                {activeZoneImage ? Math.round(activeZoneImage.y) : 0}px
+                {activeZoneImage ? Math.round(activeZoneImage.y ?? 0) : 0}px
               </span>
             </div>
             <input
@@ -306,7 +241,7 @@ export function DesignControls({
             <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
               <span>Zoom / Scale Factor:</span>
               <span className="font-mono font-bold text-slate-900">
-                {activeZoneImage ? activeZoneImage.scale.toFixed(2) : 1}x
+                {activeZoneImage ? (activeZoneImage.scale ?? 1).toFixed(2) : 1}x
               </span>
             </div>
             <input
@@ -321,59 +256,8 @@ export function DesignControls({
             />
           </div>
 
-          <div className="pt-2 border-t border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">Explicit Dimensions</span>
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  disabled={!activeZoneImage}
-                  checked={activeZoneImage?.lockAspectRatio ?? true}
-                  onChange={(e) => updateActiveZone({ lockAspectRatio: e.target.checked })}
-                  className="rounded text-slate-900 focus:ring-slate-900 accent-slate-900 disabled:opacity-40"
-                />
-                Lock Ratio
-              </label>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
-                <span>Width:</span>
-                <span className="font-mono font-bold text-slate-900">
-                  {activeZoneImage ? activeZoneImage.customWidth : 0}px
-                </span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="800"
-                step="1"
-                disabled={!activeZoneImage}
-                value={activeZoneImage?.customWidth || 100}
-                onChange={(e) => handleWidthChange(parseInt(e.target.value, 10))}
-                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
-                <span>Height:</span>
-                <span className="font-mono font-bold text-slate-900">
-                  {activeZoneImage ? activeZoneImage.customHeight : 0}px
-                </span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="800"
-                step="1"
-                disabled={!activeZoneImage}
-                value={activeZoneImage?.customHeight || 100}
-                onChange={(e) => handleHeightChange(parseInt(e.target.value, 10))}
-                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900 disabled:opacity-40 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
+          {/* Explicit dimensions controls removed — users cannot set width/height or lock ratio.
+              If needed for debugging, search for "area definition" to restore the calibration block. */}
         </div>
 
         {/* Action Buttons */}

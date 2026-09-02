@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { StandardCartItem, CartItem } from '@/types/customization';
 
 interface Product {
-  id: string;
+  id: number;
   title: string;
   price: number;
   thumbnailUrl: string;
@@ -75,7 +75,7 @@ export const StandardProductCard: React.FC<StandardProductCardProps> = ({ produc
     } else {
       const updatedItem: StandardCartItem = {
         type: 'standard',
-        id: `standard_${product.id}_${selectedSize}_${selectedColor}`,
+        id: itemIndex > -1 ? cart[itemIndex].id : Date.now() + Math.random(),
         productId: product.id,
         title: product.title,
         thumbnailUrl: product.thumbnailUrl,
