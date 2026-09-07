@@ -6,15 +6,14 @@ import Link from 'next/link';
 import { ArrowLeft, ShoppingBag, Plus, Minus, Loader2 } from 'lucide-react';
 
 interface Product {
-  id: string;
+  id: number;
   name: string;
-  base_price: number;
-  category?: string;
-  tagline?: string;
-  design_type?: string;
-  graphic_url?: string;
-  mockup_url?: string;
-  target_zone?: string;
+  desc: string;
+  price: number;
+  type: string;
+  isActive: boolean;
+  primaryImage: string | null;
+  images: string[];
 }
 
 export default function ProductDetailPage() {
@@ -26,6 +25,7 @@ export default function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState('M');
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
     if (!productId) return;
@@ -71,7 +71,10 @@ export default function ProductDetailPage() {
     );
   }
 
-  const imageUrl = product.mockup_url || product.graphic_url || 'https://via.placeholder.com/600';
+  const currentImageUrl = 
+    product.images && product.images.length > 0 
+      ? product.images[activeImageIndex] || product.primaryImage 
+      : 'https://via.placeholder.com/600';
 
   return (
     <main className="min-h-screen bg-gray-50 py-12 px-4 md:px-8">
@@ -86,20 +89,40 @@ export default function ProductDetailPage() {
 
         {/* Product Container */}
         <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 shadow-sm">
-          {/* Product Image */}
-          <div className="relative bg-gray-100 rounded-2xl overflow-hidden h-96 md:h-[450px]">
-            <img
-              src={imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://placehold.co/600x600/png?text=Image+Not+Found';
-              }}
-            />
-            {product.category && (
-              <span className="absolute top-4 left-4 bg-black/80 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                {product.category}
-              </span>
+          {/* Product Image Gallery Section */}
+          <div className="space-y-4">
+            {/* Main Active Image */}
+            <div className="relative bg-gray-100 rounded-2xl overflow-hidden h-96 md:h-[400px]">
+              <img
+                src={currentImageUrl || 'https://via.placeholder.com/600'}
+                alt={product.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://placehold.co/600x600/png?text=Image+Not+Found';
+                }}
+              />
+              {product.type && (
+                <span className="absolute top-4 left-4 bg-black/80 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {product.type}
+                </span>
+              )}
+            </div>
+
+            {/* Thumbnail Row */}
+            {product.images && product.images.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {product.images.map((imgUrl, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setActiveImageIndex(index)}
+                    className={`relative w-20 h-20 rounded-xl overflow-hidden border-2 flex-shrink-0 transition-all ${
+                      activeImageIndex === index ? 'border-black ring-2 ring-black/20' : 'border-gray-200 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={imgUrl} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 
@@ -110,11 +133,11 @@ export default function ProductDetailPage() {
                 {product.name}
               </h1>
               <p className="text-2xl font-black text-black mt-2">
-                ₹{Number(product.base_price).toLocaleString('en-IN')}
+                ₹{Number(product.price).toLocaleString('en-IN')}
               </p>
-              {product.tagline && (
+              {product.desc && (
                 <p className="text-gray-600 text-sm mt-4 leading-relaxed">
-                  {product.tagline}
+                  {product.desc}
                 </p>
               )}
             </div>
@@ -168,7 +191,7 @@ export default function ProductDetailPage() {
                 <button
                   className="flex-1 bg-black text-white text-sm font-bold py-3.5 px-6 rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-md active:scale-98"
                 >
-                  <ShoppingBag className="w-4 h-4" /> Add to Bag (₹{(product.base_price * quantity).toLocaleString('en-IN')})
+                  <ShoppingBag className="w-4 h-4" /> Add to Bag (₹{(product.price * quantity).toLocaleString('en-IN')})
                 </button>
               </div>
             </div>

@@ -46,7 +46,7 @@ export default function Navbar({ cartCount: propCartCount }: NavbarProps) {
     }
 
     try {
-      const rawCart = localStorage.getItem('cart') || localStorage.getItem('cart_items');
+      const rawCart = localStorage.getItem('cart_items');
       if (rawCart) {
         const parsedCart = JSON.parse(rawCart);
         if (Array.isArray(parsedCart)) {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, Loader2, Plus, Minus, ArrowDown } from 'lucide-react';
 import { Product } from '@/types/customization';
@@ -17,8 +17,16 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
+  
+  // Tracks the active image index per product ID
+  const [activeImageIndices, setActiveImageIndices] = useState<Record<string, number>>({});
+  
+  // Tracks hover state per product to pause auto-cycling
+  const [hoveredProducts, setHoveredProducts] = useState<Record<string, boolean>>({});
+  
+  // Refs for touch swipe tracking on mobile
+  const touchStartRef = useRef<Record<string, number>>({});
 
-  // 1. Sync cart quantities on mount and whenever storage/cart updates
   const syncQuantitiesFromStorage = () => {
     const cart = getStoredCart();
     const quantities: Record<string, number> = {};
@@ -44,7 +52,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // 2. Fetch products from backend API
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -62,10 +69,65 @@ export default function HomePage() {
     fetchProducts();
   }, []);
 
-  // 3. Cart action handlers using cartStorage helper
+  // Auto-cycle effect for products with multiple images
+  useEffect(() => {
+    const intervals: NodeJS.Timeout[] = [];
+
+    products.forEach((product: any) => {
+      const images = Array.isArray(product.images) && product.images.length > 0 ? product.images : [];
+      if (images.length <= 1 || hoveredProducts[product.id]) return;
+
+      const interval = setInterval(() => {
+        setActiveImageIndices((prev) => {
+          const current = prev[product.id] || 0;
+          return {
+            ...prev,
+            [product.id]: (current + 1) % images.length,
+          };
+        });
+      }, 4500);       // 3.5 seconds interval for cycling images
+
+      intervals.push(interval);
+    });
+
+    return () => {
+      intervals.forEach((interval) => clearInterval(interval));
+    };
+  }, [products, hoveredProducts]);
+
   const handleQuantityChange = (product: Product, delta: number, e: React.MouseEvent) => {
     e.stopPropagation();
     updateStandardItemQuantity(product, delta);
+  };
+
+  const handleImageChange = (productId: string | number, newIndex: number, max: number) => {
+    const wrappedIndex = (newIndex + max) % max;
+    setActiveImageIndices((prev) => ({
+      ...prev,
+      [productId]: wrappedIndex,
+    }));
+  };
+
+  const handleTouchStart = (productId: string | number, e: React.TouchEvent) => {
+    touchStartRef.current[productId] = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (productId: string | number, imagesLength: number, e: React.TouchEvent) => {
+    if (imagesLength <= 1) return;
+    const startX = touchStartRef.current[productId];
+    if (startX === undefined) return;
+
+    const endX = e.changedTouches[0].clientX;
+    const diff = startX - endX;
+    const minSwipeDistance = 40;
+
+    const currentIndex = activeImageIndices[productId] || 0;
+
+    if (diff > minSwipeDistance) {
+      handleImageChange(productId, currentIndex + 1, imagesLength);
+    } else if (diff < -minSwipeDistance) {
+      handleImageChange(productId, currentIndex - 1, imagesLength);
+    }
   };
 
   return (
@@ -154,8 +216,13 @@ export default function HomePage() {
 
         {!loading && !error && products.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {products.map((product) => {
-              const imageUrl = product.image || 'https://placehold.co/600x600/png?text=No+Image';
+            {products.map((product: any) => {
+              const images: string[] = 
+                Array.isArray(product.images) && product.images.length > 0
+                  ? product.images
+                  : [product.image || product.mockup_url || 'https://placehold.co/600x600/png?text=No+Image'];
+
+              const activeIdx = activeImageIndices[product.id] || 0;
               const qty = cartQuantities[product.id] || 0;
 
               return (
@@ -165,17 +232,49 @@ export default function HomePage() {
                 >
                   <Link
                     href={`/product/${product.id}`}
-                    className="block relative w-full h-72 bg-gray-100 overflow-hidden"
+                    className="block relative w-full h-72 bg-gray-100 overflow-hidden select-none cursor-pointer"
+                    onMouseEnter={() => setHoveredProducts((prev) => ({ ...prev, [product.id]: true }))}
+                    onMouseLeave={() => setHoveredProducts((prev) => ({ ...prev, [product.id]: false }))}
+                    onTouchStart={(e) => {
+                      setHoveredProducts((prev) => ({ ...prev, [product.id]: true }));
+                      handleTouchStart(product.id, e);
+                    }}
+                    onTouchEnd={(e) => handleTouchEnd(product.id, images.length, e)}
                   >
-                    <img
-                      src={imageUrl}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          'https://placehold.co/600x600/png?text=Image+Not+Found';
-                      }}
-                    />
+                    <div 
+                      className="absolute inset-0 flex transition-transform duration-500 ease-out"
+                      style={{ transform: `translateX(-${activeIdx * 100}%)` }}
+                    >
+                      {images.map((url: string, index: number) => (
+                        <img
+                          key={index}
+                          src={url}
+                          alt={`${product.name} - view ${index + 1}`}
+                          className="w-full h-full object-cover flex-shrink-0 group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://placehold.co/600x600/png?text=Image+Not+Found';
+                          }}
+                        />
+                      ))}
+                    </div>
+
+                    {images.length > 1 && (
+                      <div className="absolute bottom-3 left-0 right-0 z-20 flex justify-center items-center gap-1.5 pointer-events-none">
+                        {images.map((_, index) => (
+                          <span
+                            key={index}
+                            onMouseEnter={() => {
+                              setHoveredProducts((prev) => ({ ...prev, [product.id]: true }));
+                              handleImageChange(product.id, index, images.length);
+                            }}
+                            className={`h-1.5 rounded-full transition-all duration-300 pointer-events-auto cursor-pointer ${
+                              index === activeIdx ? 'w-5 bg-white shadow-md' : 'w-1.5 bg-white/50 hover:bg-white/80'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </Link>
 
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">

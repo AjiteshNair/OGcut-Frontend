@@ -164,8 +164,6 @@ export default function CartPage() {
   };
 
   const handleProceedToCheckout = () => {
-    localStorage.setItem('cart', JSON.stringify(cartItems));
-
     const token = localStorage.getItem('token');
     if (!token) {
       setShowAuthModal(true);
