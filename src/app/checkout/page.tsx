@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Address, UserProfile, OrderItemPayload } from '@/types/checkout';
 import { getItemPrice, formatCartItemsForBackend } from '@/utils/checkoutHelper';
+import { processRazorpayPayment } from '@/utils/razorpay';
 import { AuthStep } from '@/components/checkout/AuthStep';
 import { AddressStep } from '@/components/checkout/AddressStep';
 import { PaymentStep } from '@/components/checkout/PaymentStep';
@@ -54,78 +55,76 @@ export default function CheckoutPage() {
   const grandTotal = subtotal + shipping;
 
   // Sync Cart Items with Backend Canonical Prices
-useEffect(() => {
-  const syncCartWithBackendPrices = async () => {
-    const rawCartItems = localStorage.getItem('cart_items');
-    let parsedCart: OrderItemPayload[] = [];
+  useEffect(() => {
+    const syncCartWithBackendPrices = async () => {
+      const rawCartItems = localStorage.getItem('cart_items');
+      let parsedCart: OrderItemPayload[] = [];
 
-    if (rawCartItems) {
+      if (rawCartItems) {
+        try {
+          parsedCart = JSON.parse(rawCartItems);
+        } catch (e) {
+          console.error('Failed to parse cart_items', e);
+        }
+      }
+
+      if (parsedCart.length === 0) {
+        setCartItems([]);
+        return;
+      }
+
+      const validProductIds = Array.from(
+        new Set(
+          parsedCart
+            .map((item) => {
+              const rawId = item.productId ?? item.id;
+              const parsed = Number(rawId);
+              return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+            })
+            .filter((value): value is number => value !== null)
+        )
+      ).join(',');
+
       try {
-        parsedCart = JSON.parse(rawCartItems);
-      } catch (e) {
-        console.error('Failed to parse cart_items', e);
-      }
-    }
-
-    if (parsedCart.length === 0) {
-      setCartItems([]);
-      return;
-    }
-
-    // 1. Only include actual catalog product IDs in the price lookup; ignore custom cart row IDs like timestamps.
-    const validProductIds = Array.from(
-      new Set(
-        parsedCart
-          .map((item) => {
-            const rawId = item.productId ?? item.id;
-            const parsed = Number(rawId);
-            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-          })
-          .filter((value): value is number => value !== null)
-      )
-    ).join(',');
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/products/prices?ids=${validProductIds}`);
-      
-      if (!res.ok) {
-        throw new Error(`Failed to fetch backend prices: ${res.statusText}`);
-      }
-
-      const priceMap: Record<number, number> = await res.json();
-
-      // 2. Map prices back using the numeric catalog product ID only when it is valid.
-      parsedCart = parsedCart.map((item) => {
-        const rawProductId = Number(item.productId ?? item.id);
-        const targetProductId = Number.isFinite(rawProductId) && rawProductId > 0 ? rawProductId : null;
-
-        if (targetProductId === null) {
-          return item;
+        const res = await fetch(`${API_BASE_URL}/products/prices?ids=${validProductIds}`);
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch backend prices: ${res.statusText}`);
         }
 
-        const backendPrice = priceMap[targetProductId] ?? item.unitPrice ?? item.price ?? 0;
+        const priceMap: Record<number, number> = await res.json();
 
-        return {
-          ...item,
-          productId: targetProductId,
-          unitPrice: backendPrice,
-          price: backendPrice,
-        };
-      });
-    } catch (err) {
-      console.error('Price synchronization failed:', err);
-    }
+        parsedCart = parsedCart.map((item) => {
+          const rawProductId = Number(item.productId ?? item.id);
+          const targetProductId = Number.isFinite(rawProductId) && rawProductId > 0 ? rawProductId : null;
 
-    setCartItems(parsedCart);
+          if (targetProductId === null) {
+            return item;
+          }
 
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetchUserAndAddresses(token);
-    }
-  };
+          const backendPrice = priceMap[targetProductId] ?? item.unitPrice ?? item.price ?? 0;
 
-  syncCartWithBackendPrices();
-}, [API_BASE_URL]);
+          return {
+            ...item,
+            productId: targetProductId,
+            unitPrice: backendPrice,
+            price: backendPrice,
+          };
+        });
+      } catch (err) {
+        console.error('Price synchronization failed:', err);
+      }
+
+      setCartItems(parsedCart);
+
+      const token = localStorage.getItem('token');
+      if (token) {
+        fetchUserAndAddresses(token);
+      }
+    };
+
+    syncCartWithBackendPrices();
+  }, [API_BASE_URL]);
 
   const fetchUserAndAddresses = async (token: string) => {
     setLoading(true);
@@ -232,6 +231,7 @@ useEffect(() => {
     try {
       const formattedItems = formatCartItemsForBackend(cartItems);
 
+      // 1. Create order in NestJS database
       const res = await fetch(`${API_BASE_URL}/orders`, {
         method: 'POST',
         headers: {
@@ -244,21 +244,38 @@ useEffect(() => {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json(); // 👈 Extract whole response payload
-        const createdOrder = data.order; // 👈 Extract nested order object
-
-        localStorage.removeItem('cart_items');
-
-        router.push(`/order-success?orderCode=${createdOrder.orderCode}`);
-        
-      } else {
+      if (!res.ok) {
         const err = await res.json();
         alert(`Order placement failed: ${err.message || 'Error occurred'}`);
+        setSubmittingOrder(false);
+        return;
       }
+
+      const data = await res.json();
+      const createdOrder = data.order;
+      const selectedAddressObj = addresses.find((a) => a.id === selectedAddressId);
+
+      // 2. Trigger Razorpay Modal & Signature Verification Flow
+      await processRazorpayPayment({
+        apiBaseUrl: API_BASE_URL,
+        token,
+        orderId: createdOrder.id,
+        orderCode: createdOrder.orderCode,
+        userEmail: user?.email || authEmail,
+        userName: selectedAddressObj?.fullName || '',
+        userPhone: selectedAddressObj?.phone || '',
+        onSuccess: (orderCode) => {
+          localStorage.removeItem('cart_items');
+          setSubmittingOrder(false);
+          router.push(`/order-success?orderCode=${orderCode}`);
+        },
+        onError: (errorMessage) => {
+          setSubmittingOrder(false);
+          alert(`Payment Failed: ${errorMessage}`);
+        },
+      });
     } catch (error) {
       console.error('Place order error:', error);
-    } finally {
       setSubmittingOrder(false);
     }
   };
@@ -304,7 +321,7 @@ useEffect(() => {
           />
         </div>
 
-        {/* Lightweight Order Summary (Only Text Details, No 3D Canvas / Large Assets) */}
+        {/* Lightweight Order Summary */}
         <OrderSummary
           cartItems={cartItems}
           subtotal={subtotal}
