@@ -57,7 +57,7 @@ export interface Product {
   price: number;
   type: string;
   isActive: boolean;
-  image: string | null;
+  images?: string[];
   
   // Optional / legacy fields
   category?: string;
@@ -89,7 +89,7 @@ export interface StandardCartItem {
   title: string;
   name?: string;
   thumbnailUrl?: string;
-  image?: string;
+  images?: string[];
   price: number;
   unitPrice?: number;
   quantity: number;

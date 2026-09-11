@@ -22,7 +22,9 @@ export const updateStandardItemQuantity = (
   delta: number
 ): CartItem[] => {
   const currentCart = getStoredCart();
-  
+  const productImages = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
+  const primaryImage = productImages[0] || '';
+
   // Find standard item matching this product ID
   const itemIndex = currentCart.findIndex(
     (item): item is StandardCartItem =>
@@ -45,7 +47,8 @@ export const updateStandardItemQuantity = (
       id: Date.now() + Math.random(),
       productId: product.id,
       title: product.name,
-      thumbnailUrl: product.image || '',
+      thumbnailUrl: primaryImage,
+      images: productImages.length > 0 ? productImages : primaryImage ? [primaryImage] : [],
       price: product.price,
       quantity: delta,
     };

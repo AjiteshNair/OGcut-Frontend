@@ -8,8 +8,7 @@ type ProductInput = {
   name: string;
   base_price?: number;
   price?: number;
-  mockup_url?: string | null;
-  graphic_url?: string | null;
+  images?: string[] | null;
   image?: string;
 };
 
@@ -41,8 +40,7 @@ export default function AddToCartButton({
             id: product.id,
             name: product.name,
             base_price: price,
-            mockup_url: product.mockup_url || product.image,
-            graphic_url: product.graphic_url,
+            images: product.images,
           })
         }
         className={`w-full rounded-full bg-[#b88b58] text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-white transition duration-300 hover:opacity-90 ${

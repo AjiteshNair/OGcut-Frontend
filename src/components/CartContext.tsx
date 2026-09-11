@@ -10,10 +10,14 @@ export interface CartItem {
   quantity: number;
 }
 
+const resolvePrimaryImage = (product: { images?: string[] | null;}) => {
+  return product.images?.[0] ?? '';
+};
+
 interface CartContextType {
   cart: CartItem[];
   cartItems: CartItem[]; // <--- Added for page compatibility
-  addToCart: (product: { id: string; name: string; base_price: number; mockup_url?: string | null; graphic_url?: string | null }) => void;
+  addToCart: (product: { id: string; name: string; base_price: number; images?: string[] | null; image?: string | null }) => void;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, delta: number) => void;
   clearCart: () => void;
@@ -57,9 +61,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     id: string;
     name: string;
     base_price: number;
-    mockup_url?: string | null;
-    graphic_url?: string | null;
+    images?: string[] | null;
+    image?: string | null;
   }) => {
+    const primaryImage = resolvePrimaryImage(product);
+
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
@@ -71,12 +77,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         {
           id: product.id,
-          type: 'standard', // <--- Identifies it as a standard catalog item
-          title: product.name, // <--- Preserves the actual catalog item name
+          type: 'standard',
+          title: product.name,
           name: product.name,
           price: Number(product.base_price),
-          image: product.mockup_url || product.graphic_url || '',
-          thumbnailUrl: product.mockup_url || product.graphic_url || '',
+          image: primaryImage,
+          thumbnailUrl: primaryImage,
+          images: primaryImage ? [primaryImage] : [],
           quantity: 1,
         },
       ];

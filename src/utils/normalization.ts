@@ -95,14 +95,19 @@ export function normalizeCartItem(rawItem: any): CartItem {
   const isCustom = isExplicitCustom || (!isExplicitStandard && hasCustomSignature);
 
   if (!isCustom) {
+    const normalizedImages = Array.isArray(rawItem?.images)
+      ? rawItem.images.filter(Boolean)
+      : [];
+    const primaryImage = normalizedImages[0] || rawItem?.thumbnailUrl || undefined;
+
     return {
       type: 'standard',
       id: Number(rawItem?.id ?? Date.now()),
       productId: Number(rawItem?.productId ?? rawItem?.pid ?? 0),
       title: rawItem?.title ?? rawItem?.name ?? 'Standard Product',
       name: rawItem?.name ?? rawItem?.title ?? 'Standard Product',
-      image: rawItem?.image ?? rawItem?.thumbnailUrl ?? rawItem?.imageUrl ?? undefined,
-      thumbnailUrl: rawItem?.thumbnailUrl ?? rawItem?.image ?? undefined,
+      thumbnailUrl: primaryImage,
+      images: normalizedImages.length > 0 ? normalizedImages : undefined,
       price: Number(rawItem?.price ?? rawItem?.unitPrice ?? 0),
       unitPrice: Number(rawItem?.unitPrice ?? rawItem?.price ?? 0),
       quantity: Number(rawItem?.quantity ?? 1),

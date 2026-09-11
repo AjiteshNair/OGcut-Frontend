@@ -19,12 +19,17 @@ export const StandardCartItemRow: React.FC<StandardCartItemRowProps> = ({
   onSizeChange,
   onRemove,
 }) => {
+  const thumbnailSrc =
+    Array.isArray(item.images) && item.images.length > 0
+      ? item.images[0]
+      : 'https://placehold.co/200x200/png?text=No+Image';
+
   return (
     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
       {/* 2D Image Thumbnail */}
       <div className="w-28 h-28 rounded-xl border border-slate-200 bg-slate-100 overflow-hidden relative shrink-0">
         <Image
-          src={item.thumbnailUrl || 'https://placehold.co/200x200/png?text=No+Image'}
+          src={thumbnailSrc}
           alt={item.title}
           fill
           className="object-cover"
